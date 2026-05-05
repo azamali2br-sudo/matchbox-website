@@ -1,5 +1,6 @@
 import Hero from "@/components/home/Hero";
 import Features from "@/components/home/Features";
+import Gallery from "@/components/home/Gallery";
 import Courts from "@/components/home/Courts";
 import Pricing from "@/components/home/Pricing";
 import MatchIQTeaser from "@/components/home/MatchIQTeaser";
@@ -11,6 +12,7 @@ export default function HomePage() {
     <>
       <Hero />
       <Features />
+      <Gallery />
       <Courts />
       <Pricing />
       <MatchIQTeaser />

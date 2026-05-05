@@ -1,11 +1,13 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const courts = [
   {
     id: "A",
     name: "Box A",
     tag: "Most Popular",
-    tagColor: "bg-orange text-white",
+    tagStyle: "bg-orange text-white",
+    image: "/images/bruno-vaccaro-vercellino-a4SslXtr1TE-unsplash.jpg",
     description:
       "The crowd favourite. Box A is our flagship court — fast, well-lit, and perfectly maintained. The court where rivalries are born and champions are made.",
     features: ["Pro-grade synthetic turf", "Full floodlighting", "Glass back wall", "Viewing area"],
@@ -14,7 +16,8 @@ const courts = [
     id: "B",
     name: "Box B",
     tag: "Hidden Gem",
-    tagColor: "bg-white/10 text-white",
+    tagStyle: "bg-white/15 text-white border border-white/20",
+    image: "/images/oliver-sjostrom-sZKLku0YnFM-unsplash.jpg",
     description:
       "Don't sleep on Box B. Same international-standard build, same great padel — just waiting for you to discover why regulars are quietly making it their first choice.",
     features: ["Pro-grade synthetic turf", "Full floodlighting", "Glass back wall", "Premium feel"],
@@ -49,26 +52,36 @@ export default function Courts() {
           {courts.map((court) => (
             <div
               key={court.id}
-              className="relative bg-navy-card rounded-3xl p-8 md:p-10 border border-white/8 overflow-hidden group hover:border-orange/30 transition-all duration-300"
+              className="relative bg-navy-card rounded-3xl border border-white/8 overflow-hidden group hover:border-orange/30 transition-all duration-300"
             >
-              {/* Background court number watermark */}
-              <div className="absolute -right-4 -bottom-8 font-qaranta text-[160px] leading-none text-white/3 select-none pointer-events-none">
-                {court.id}
-              </div>
-
-              <div className="relative">
-                <div className="flex items-start justify-between mb-6">
-                  <div className="w-16 h-16 rounded-2xl bg-orange/10 border border-orange/20 flex items-center justify-center">
-                    <span className="font-qaranta text-3xl text-orange">{court.id}</span>
-                  </div>
-                  <span className={`font-poppins text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full ${court.tagColor}`}>
+              <div className="relative h-56 overflow-hidden">
+                <Image
+                  src={court.image}
+                  alt={`${court.name} at Matchbox Padel`}
+                  fill
+                  className="object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-navy/85 pointer-events-none" />
+                <div className="absolute top-4 right-4">
+                  <span className={`font-poppins text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full ${court.tagStyle}`}>
                     {court.tag}
                   </span>
                 </div>
+                <div className="absolute bottom-4 left-6">
+                  <span className="font-qaranta text-5xl text-white/15 leading-none select-none">{court.id}</span>
+                </div>
+              </div>
 
-                <h3 className="font-qaranta text-4xl text-white uppercase mb-4 group-hover:text-orange transition-colors">
-                  {court.name}
-                </h3>
+              <div className="p-8 md:p-10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-orange/10 border border-orange/20 flex items-center justify-center">
+                    <span className="font-qaranta text-2xl text-orange">{court.id}</span>
+                  </div>
+                  <h3 className="font-qaranta text-3xl text-white uppercase group-hover:text-orange transition-colors">
+                    {court.name}
+                  </h3>
+                </div>
+
                 <p className="font-poppins text-white/60 text-sm leading-relaxed mb-8">
                   {court.description}
                 </p>
