@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #181F49;
+  --color-navy-dark: #111628;
+  --color-navy-card: #1d2554;
+  --color-orange: #F68E3B;
+  --color-orange-dark: #d4721f;
+  --font-qaranta: var(--font-qaranta);
+  --font-poppins: var(--font-poppins);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #181F49;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
