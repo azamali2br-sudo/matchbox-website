@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDemoBookings, addDemoBooking, type Booking } from '@/lib/mock-data'
-import { generateBookingRef, getTotalPrice, addHoursToTime } from '@/lib/constants'
+import { getDemoBookings, addDemoBooking, expireHolds, type Booking } from '@/lib/mock-data'
+import { generateBookingRef, getTotalPrice, addHoursToTime, HOLD_DURATION_MINUTES } from '@/lib/constants'
 
 const DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL
 
@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   const court = searchParams.get('court')
 
   if (DEMO_MODE) {
+    expireHolds()
     let bookings = getDemoBookings()
     if (date) bookings = bookings.filter(b => b.date === date)
     if (court) bookings = bookings.filter(b => b.court === court)
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
     totalPrice: getTotalPrice(startTime, durationHours),
     ref: generateBookingRef(),
     createdAt: new Date().toISOString(),
+    holdExpiresAt: new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000).toISOString(),
   }
 
   if (DEMO_MODE) {

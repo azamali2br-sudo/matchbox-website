@@ -17,13 +17,14 @@ export const BANK_DETAILS = {
 }
 
 export const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3]
+export const HOLD_DURATION_MINUTES = 30
 
-// Slots shown in the UI — 1-hour blocks from 6 AM through 5 AM next day
+// Slots shown in the UI — 1-hour blocks for a full calendar day (midnight to 11 PM)
 export const TIME_SLOTS = [
+  '00:00', '01:00', '02:00', '03:00', '04:00', '05:00',
   '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
   '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
   '18:00', '19:00', '20:00', '21:00', '22:00', '23:00',
-  '00:00', '01:00', '02:00', '03:00', '04:00', '05:00',
 ]
 
 export function isPeakHour(time: string): boolean {
@@ -36,7 +37,14 @@ export function getPricePerHour(time: string): number {
 }
 
 export function getTotalPrice(startTime: string, durationHours: number): number {
-  return getPricePerHour(startTime) * durationHours
+  let total = 0
+  let current = startTime
+  const steps = Math.round(durationHours * 2) // 30-min increments
+  for (let i = 0; i < steps; i++) {
+    total += getPricePerHour(current) * 0.5
+    current = addHoursToTime(current, 0.5)
+  }
+  return total
 }
 
 export function formatTime(time: string): string {
@@ -50,13 +58,9 @@ export function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString()}`
 }
 
-// Normalize time to minutes past midnight, treating booking day as starting at 6 AM
 export function timeToNormalizedMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number)
-  const totalMinutes = h * 60 + m
-  // Shift so 6 AM = 0, 5:59 AM next day = 1439
-  const shifted = totalMinutes < 6 * 60 ? totalMinutes + 24 * 60 : totalMinutes
-  return shifted - 6 * 60
+  return h * 60 + m
 }
 
 export function addHoursToTime(time: string, hours: number): string {
@@ -73,9 +77,10 @@ export function doesBookingOverlapSlot(
   slotStart: string,
 ): boolean {
   const bs = timeToNormalizedMinutes(bookingStart)
-  const be = timeToNormalizedMinutes(bookingEnd)
+  let be = timeToNormalizedMinutes(bookingEnd)
   const ss = timeToNormalizedMinutes(slotStart)
   const se = ss + 60
+  if (be <= bs) be += 24 * 60 // handle bookings that cross midnight
   return bs < se && be > ss
 }
 

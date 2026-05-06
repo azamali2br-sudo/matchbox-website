@@ -300,6 +300,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         <p className="font-poppins text-white/35 text-xs uppercase tracking-wider">Ref</p>
                         <p className="font-poppins text-white/70 text-sm font-medium font-mono mt-0.5">{booking.ref}</p>
                         <StatusBadge status={booking.status} />
+                        {booking.status === 'pending' && booking.holdExpiresAt && (
+                          <HoldExpiry expiresAt={booking.holdExpiresAt} />
+                        )}
                       </div>
                     </div>
 
@@ -347,6 +350,23 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </div>
     </div>
+  )
+}
+
+function HoldExpiry({ expiresAt }: { expiresAt: string }) {
+  const expires = new Date(expiresAt)
+  const now = new Date()
+  const isExpired = expires < now
+  const minutesLeft = Math.ceil((expires.getTime() - now.getTime()) / 60000)
+  const timeStr = expires.toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit', hour12: true })
+
+  if (isExpired) {
+    return <p className="font-poppins text-red-400/70 text-xs mt-1">Hold expired</p>
+  }
+  return (
+    <p className="font-poppins text-amber-400/70 text-xs mt-1">
+      Holds until {timeStr} ({minutesLeft}m left)
+    </p>
   )
 }
 

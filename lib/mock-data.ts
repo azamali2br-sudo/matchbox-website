@@ -16,6 +16,7 @@ export interface Booking {
   totalPrice: number
   ref: string
   createdAt: string
+  holdExpiresAt?: string
 }
 
 export const MOCK_BOOKINGS: Booking[] = [
@@ -63,6 +64,7 @@ export const MOCK_BOOKINGS: Booking[] = [
     totalPrice: 4875,
     ref: 'MBX-BA003',
     createdAt: new Date().toISOString(),
+    holdExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   },
   {
     id: '4',
@@ -93,6 +95,7 @@ export const MOCK_BOOKINGS: Booking[] = [
     totalPrice: 6500,
     ref: 'MBX-ZM005',
     createdAt: new Date().toISOString(),
+    holdExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   },
   {
     id: '6',
@@ -148,4 +151,13 @@ export function deleteDemoBooking(id: string): boolean {
   const before = demoBookings.length
   demoBookings = demoBookings.filter(b => b.id !== id)
   return demoBookings.length < before
+}
+
+export function expireHolds(): void {
+  const now = new Date().toISOString()
+  demoBookings = demoBookings.map(b =>
+    b.status === 'pending' && b.holdExpiresAt && b.holdExpiresAt < now
+      ? { ...b, status: 'cancelled' }
+      : b
+  )
 }

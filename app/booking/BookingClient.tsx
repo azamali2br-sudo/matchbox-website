@@ -38,6 +38,7 @@ interface SuccessData {
   durationHours: number
   name: string
   totalPrice: number
+  holdExpiresAt: string
 }
 
 export default function BookingClient() {
@@ -157,6 +158,7 @@ export default function BookingClient() {
         durationHours: duration,
         name: form.name.trim(),
         totalPrice: getTotalPrice(selectedSlot, duration),
+        holdExpiresAt: data.booking.holdExpiresAt,
       })
       setStep('success')
     } catch {
@@ -178,6 +180,21 @@ export default function BookingClient() {
 
   const price = selectedSlot ? getTotalPrice(selectedSlot, duration) : null
   const endTime = selectedSlot ? addHoursToTime(selectedSlot, duration) : null
+
+  function getBookingRateType(startTime: string, dur: number): 'peak' | 'off-peak' | 'mixed' {
+    let hasPeak = false, hasOffPeak = false
+    let current = startTime
+    const steps = Math.round(dur * 2)
+    for (let i = 0; i < steps; i++) {
+      if (isPeakHour(current)) hasPeak = true
+      else hasOffPeak = true
+      current = addHoursToTime(current, 0.5)
+    }
+    if (hasPeak && hasOffPeak) return 'mixed'
+    return hasPeak ? 'peak' : 'off-peak'
+  }
+
+  const rateType = selectedSlot ? getBookingRateType(selectedSlot, duration) : null
   const isToday = date === getTodayStr()
   const minDate = getTodayStr()
   const maxDate = getDateStr(30)
@@ -419,10 +436,19 @@ export default function BookingClient() {
                         <p className="font-qaranta text-3xl text-orange mt-0.5">{formatCurrency(price)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-poppins text-white/40 text-xs">{formatCurrency(getPricePerHour(selectedSlot))}/hr</p>
-                        <p className="font-poppins text-xs mt-1 text-orange/70">
-                          {isPeakHour(selectedSlot) ? '⚡ Peak' : '🌤 Off-peak'}
-                        </p>
+                        {rateType === 'mixed' ? (
+                          <>
+                            <p className="font-poppins text-white/40 text-xs">Mixed rate</p>
+                            <p className="font-poppins text-xs mt-1 text-orange/70">⚡ Peak + 🌤 Off-peak</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-poppins text-white/40 text-xs">{formatCurrency(getPricePerHour(selectedSlot))}/hr</p>
+                            <p className="font-poppins text-xs mt-1 text-orange/70">
+                              {rateType === 'peak' ? '⚡ Peak' : '🌤 Off-peak'}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -461,9 +487,11 @@ export default function BookingClient() {
                       {submitting ? 'Confirming...' : 'Confirm Booking'}
                     </button>
 
-                    <p className="font-poppins text-white/25 text-xs text-center">
-                      Payment via bank transfer. Instructions on next screen.
-                    </p>
+                    <div className="bg-amber-400/8 border border-amber-400/20 rounded-xl px-4 py-3 text-center">
+                      <p className="font-poppins text-amber-400/90 text-xs leading-relaxed">
+                        ⏱ Your slot is held for <span className="font-semibold">30 minutes</span> after booking. Send payment within that window to keep it.
+                      </p>
+                    </div>
                   </form>
                 </div>
               </div>
@@ -476,6 +504,10 @@ export default function BookingClient() {
 }
 
 function SuccessScreen({ data, onBookAnother }: { data: SuccessData; onBookAnother: () => void }) {
+  const holdUntil = data.holdExpiresAt
+    ? new Date(data.holdExpiresAt).toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit', hour12: true })
+    : null
+
   return (
     <div className="min-h-screen bg-navy pt-20 flex items-start justify-center">
       <div className="max-w-xl w-full mx-auto px-6 py-16">
@@ -541,9 +573,14 @@ function SuccessScreen({ data, onBookAnother }: { data: SuccessData; onBookAnoth
           </a>
         </div>
 
-        <p className="font-poppins text-white/30 text-xs text-center mb-8">
-          Your slot is held for 2 hours. We'll confirm by WhatsApp once payment is received.
-        </p>
+        {holdUntil && (
+          <div className="bg-amber-400/8 border border-amber-400/25 rounded-2xl px-5 py-4 mb-6 flex items-center gap-3">
+            <span className="text-amber-400 text-lg shrink-0">⏱</span>
+            <p className="font-poppins text-amber-400/90 text-sm leading-relaxed">
+              Slot held until <span className="font-semibold text-amber-400">{holdUntil}</span>. Send your payment screenshot before then — the slot releases automatically if we don't receive it.
+            </p>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button
