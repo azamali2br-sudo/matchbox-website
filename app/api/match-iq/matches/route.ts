@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/supabase'
 
 const MATCH_SELECT = `
-  id, played_on, team1_score, team2_score, status, submitted_by, created_at,
+  id, played_on, team1_score, team2_score, set_scores, status, submitted_by, created_at,
   p1:players!team1_p1(id, name, rating),
   p2:players!team1_p2(id, name, rating),
   p3:players!team2_p1(id, name, rating),
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { playedOn, team1, team2, team1Score, team2Score, submittedBy } = body
+  const { playedOn, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
 
   if (!playedOn || !team1?.[0] || !team1?.[1] || !team2?.[0] || !team2?.[1]) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       team2_p2: t2p2,
       team1_score: team1Score,
       team2_score: team2Score,
+      set_scores: setScores ?? null,
       submitted_by: submittedBy || 'unknown',
     })
     .select(MATCH_SELECT)

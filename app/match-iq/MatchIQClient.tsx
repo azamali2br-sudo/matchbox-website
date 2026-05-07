@@ -12,11 +12,13 @@ type Player = {
 }
 
 type MatchPlayer = { id: string; name: string; rating: number }
+type SetScore = { t1: number; t2: number }
 type Match = {
   id: string
   played_on: string
   team1_score: number
   team2_score: number
+  set_scores: SetScore[] | null
   p1: MatchPlayer
   p2: MatchPlayer
   p3: MatchPlayer
@@ -198,10 +200,15 @@ function RecentMatches({ matches }: { matches: Match[] }) {
               <div className="text-center shrink-0">
                 <div className="flex items-center gap-3">
                   <span className={`font-qaranta text-3xl ${team1Won ? 'text-orange' : 'text-white/30'}`}>{match.team1_score}</span>
-                  <span className="font-poppins text-white/20 text-xs">vs</span>
+                  <span className="font-poppins text-white/20 text-xs">–</span>
                   <span className={`font-qaranta text-3xl ${!team1Won ? 'text-orange' : 'text-white/30'}`}>{match.team2_score}</span>
                 </div>
-                <p className="font-poppins text-white/25 text-xs mt-1">
+                {match.set_scores && (
+                  <p className="font-poppins text-white/25 text-xs mt-1">
+                    {match.set_scores.map(s => `${s.t1}–${s.t2}`).join(', ')}
+                  </p>
+                )}
+                <p className="font-poppins text-white/20 text-xs mt-1">
                   {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}
                 </p>
               </div>

@@ -6,11 +6,13 @@ import Link from 'next/link'
 type Player = { id: string; name: string; rating: number; wins: number; losses: number; created_at: string }
 type RatingPoint = { rating: number; created_at: string }
 type MatchPlayer = { id: string; name: string; rating: number }
+type SetScore = { t1: number; t2: number }
 type Match = {
   id: string
   played_on: string
   team1_score: number
   team2_score: number
+  set_scores: SetScore[] | null
   p1: MatchPlayer; p2: MatchPlayer; p3: MatchPlayer; p4: MatchPlayer
 }
 
@@ -132,10 +134,21 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
                         {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </p>
                     </div>
-                    <div className="font-qaranta text-lg shrink-0">
-                      <span className={won ? 'text-orange' : 'text-white/30'}>{myScore}</span>
-                      <span className="text-white/20 mx-1">–</span>
-                      <span className={!won ? 'text-orange' : 'text-white/30'}>{oppScore}</span>
+                    <div className="text-right shrink-0">
+                      <div className="font-qaranta text-lg">
+                        <span className={won ? 'text-orange' : 'text-white/30'}>{myScore}</span>
+                        <span className="text-white/20 mx-1">–</span>
+                        <span className={!won ? 'text-orange' : 'text-white/30'}>{oppScore}</span>
+                      </div>
+                      {match.set_scores && (
+                        <p className="font-poppins text-white/25 text-xs mt-0.5">
+                          {match.set_scores.map((s, i) => {
+                            const t1 = onTeam1 ? s.t1 : s.t2
+                            const t2 = onTeam1 ? s.t2 : s.t1
+                            return <span key={i}>{i > 0 && ', '}{t1}–{t2}</span>
+                          })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )

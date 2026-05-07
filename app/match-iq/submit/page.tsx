@@ -1,28 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 type PlayerSlot = { name: string; phone: string; known: boolean; lookingUp: boolean }
+type SetScore = { t1: string; t2: string }
 
 const emptySlot = (): PlayerSlot => ({ name: '', phone: '', known: false, lookingUp: false })
+
+function setsPlayed(t1: number, t2: number): number {
+  return t1 + t2
+}
+
+function isValidSetsScore(t1: string, t2: string): boolean {
+  const a = parseInt(t1)
+  const b = parseInt(t2)
+  if (isNaN(a) || isNaN(b)) return false
+  return (a === 2 && (b === 0 || b === 1)) || (b === 2 && (a === 0 || a === 1))
+}
 
 export default function SubmitMatchPage() {
   const [players, setPlayers] = useState<[PlayerSlot, PlayerSlot, PlayerSlot, PlayerSlot]>([
     emptySlot(), emptySlot(), emptySlot(), emptySlot(),
   ])
-  const [team1Score, setTeam1Score] = useState('')
-  const [team2Score, setTeam2Score] = useState('')
+  const [team1Sets, setTeam1Sets] = useState('')
+  const [team2Sets, setTeam2Sets] = useState('')
+  const [showSetScores, setShowSetScores] = useState(false)
+  const [setScores, setSetScores] = useState<SetScore[]>([])
   const [playedOn, setPlayedOn] = useState(new Date().toISOString().split('T')[0])
-  const [submitterPhone, setSubmitterPhone] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  const validScore = isValidSetsScore(team1Sets, team2Sets)
+  const totalSets = validScore ? setsPlayed(parseInt(team1Sets), parseInt(team2Sets)) : 0
+
+  // Sync set score rows when total sets changes
+  useEffect(() => {
+    if (!validScore) {
+      setShowSetScores(false)
+      setSetScores([])
+      return
+    }
+    setSetScores(prev => {
+      const next: SetScore[] = []
+      for (let i = 0; i < totalSets; i++) {
+        next.push(prev[i] ?? { t1: '', t2: '' })
+      }
+      return next
+    })
+  }, [totalSets, validScore])
 
   function updateSlot(i: number, fields: Partial<PlayerSlot>) {
     setPlayers(prev => {
       const next = [...prev] as typeof prev
       next[i] = { ...next[i], ...fields }
+      return next
+    })
+  }
+
+  function updateSetScore(i: number, field: 't1' | 't2', value: string) {
+    setSetScores(prev => {
+      const next = [...prev]
+      next[i] = { ...next[i], [field]: value }
       return next
     })
   }
@@ -53,14 +93,14 @@ export default function SubmitMatchPage() {
         return
       }
     }
-    if (!team1Score || !team2Score) {
-      setError('Both scores are required.')
+    if (!validScore) {
+      setError('Score must be 2–0 or 2–1 (sets won, best of 3).')
       return
     }
-    if (team1Score === team2Score) {
-      setError('Padel matches cannot end in a draw.')
-      return
-    }
+
+    const parsedSetScores = showSetScores
+      ? setScores.map(s => ({ t1: parseInt(s.t1) || 0, t2: parseInt(s.t2) || 0 }))
+      : null
 
     setSubmitting(true)
     try {
@@ -71,9 +111,10 @@ export default function SubmitMatchPage() {
           playedOn,
           team1: [players[0], players[1]],
           team2: [players[2], players[3]],
-          team1Score: parseInt(team1Score),
-          team2Score: parseInt(team2Score),
-          submittedBy: submitterPhone || players[0].phone,
+          team1Score: parseInt(team1Sets),
+          team2Score: parseInt(team2Sets),
+          setScores: parsedSetScores,
+          submittedBy: players[0].phone,
         }),
       })
       const data = await res.json()
@@ -84,6 +125,15 @@ export default function SubmitMatchPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function reset() {
+    setSuccess(false)
+    setPlayers([emptySlot(), emptySlot(), emptySlot(), emptySlot()])
+    setTeam1Sets('')
+    setTeam2Sets('')
+    setShowSetScores(false)
+    setSetScores([])
   }
 
   if (success) {
@@ -99,20 +149,12 @@ export default function SubmitMatchPage() {
           <p className="font-poppins text-white/50 text-sm mb-2">
             Your match is pending admin approval. Ratings will update once confirmed.
           </p>
-          <p className="font-poppins text-white/30 text-xs mb-10">
-            Usually approved within a few hours.
-          </p>
+          <p className="font-poppins text-white/30 text-xs mb-10">Usually approved within a few hours.</p>
           <div className="flex flex-col gap-3">
-            <Link
-              href="/match-iq"
-              className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all"
-            >
+            <Link href="/match-iq" className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all">
               View Leaderboard
             </Link>
-            <button
-              onClick={() => { setSuccess(false); setPlayers([emptySlot(), emptySlot(), emptySlot(), emptySlot()]); setTeam1Score(''); setTeam2Score('') }}
-              className="font-poppins text-white/40 text-sm hover:text-white/70 transition-colors"
-            >
+            <button onClick={reset} className="font-poppins text-white/40 text-sm hover:text-white/70 transition-colors">
               Submit Another Match
             </button>
           </div>
@@ -130,7 +172,7 @@ export default function SubmitMatchPage() {
 
         <h1 className="font-qaranta text-5xl text-white uppercase mb-2">Submit <span className="text-orange">Match</span></h1>
         <p className="font-poppins text-white/40 text-sm mb-10">
-          Enter all 4 players and the final score. Your match will be reviewed before ratings update.
+          Enter all 4 players and the final score. Pending admin approval before ratings update.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -153,7 +195,6 @@ export default function SubmitMatchPage() {
                 <span className={`w-2 h-2 rounded-full ${teamIdx === 0 ? 'bg-orange' : 'bg-white/30'}`} />
                 <span className="font-poppins text-white/70 text-xs font-semibold uppercase tracking-widest">{teamLabel}</span>
               </div>
-
               <div className="space-y-4">
                 {[0, 1].map(slotOffset => {
                   const i = teamIdx * 2 + slotOffset
@@ -186,9 +227,7 @@ export default function SubmitMatchPage() {
                               : 'bg-navy border-white/10 text-white focus:border-orange/50'
                           }`}
                         />
-                        {slot.known && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>
-                        )}
+                        {slot.known && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>}
                       </div>
                     </div>
                   )
@@ -197,36 +236,91 @@ export default function SubmitMatchPage() {
             </div>
           ))}
 
-          {/* Score */}
+          {/* Sets won */}
           <div className="bg-navy-card border border-white/8 rounded-2xl p-6">
-            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-4">Final Score</label>
+            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-1">Sets Won — Best of 3</label>
+            <p className="font-poppins text-white/25 text-xs mb-5">Enter how many sets each team won. Valid scores: 2–0 or 2–1.</p>
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <p className="font-poppins text-orange text-xs mb-2">Team 1</p>
                 <input
                   type="number"
-                  min={0}
-                  max={20}
+                  min={0} max={2}
                   placeholder="0"
-                  value={team1Score}
-                  onChange={e => setTeam1Score(e.target.value)}
+                  value={team1Sets}
+                  onChange={e => setTeam1Sets(e.target.value)}
                   className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
                 />
               </div>
-              <span className="font-poppins text-white/20 text-lg mt-6">vs</span>
+              <div className="text-center mt-5">
+                <span className="font-poppins text-white/20 text-lg">–</span>
+              </div>
               <div className="flex-1">
                 <p className="font-poppins text-white/40 text-xs mb-2">Team 2</p>
                 <input
                   type="number"
-                  min={0}
-                  max={20}
+                  min={0} max={2}
                   placeholder="0"
-                  value={team2Score}
-                  onChange={e => setTeam2Score(e.target.value)}
+                  value={team2Sets}
+                  onChange={e => setTeam2Sets(e.target.value)}
                   className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
                 />
               </div>
             </div>
+
+            {/* Set scores expander */}
+            {validScore && (
+              <div className="mt-5 border-t border-white/6 pt-5">
+                {!showSetScores ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowSetScores(true)}
+                    className="font-poppins text-orange/70 hover:text-orange text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    <span className="text-base leading-none">+</span> Add set scores (optional)
+                  </button>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="font-poppins text-white/40 text-xs uppercase tracking-widest">Set Scores</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowSetScores(false)}
+                        className="font-poppins text-white/25 hover:text-white/50 text-xs transition-colors"
+                      >
+                        Remove ×
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {setScores.map((s, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="font-poppins text-white/30 text-xs w-10">Set {i + 1}</span>
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="number"
+                              min={0} max={7}
+                              placeholder="0"
+                              value={s.t1}
+                              onChange={e => updateSetScore(i, 't1', e.target.value)}
+                              className="flex-1 bg-navy border border-white/10 text-white font-qaranta text-2xl text-center px-3 py-2.5 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                            />
+                            <span className="font-poppins text-white/20 text-sm">–</span>
+                            <input
+                              type="number"
+                              min={0} max={7}
+                              placeholder="0"
+                              value={s.t2}
+                              onChange={e => updateSetScore(i, 't2', e.target.value)}
+                              className="flex-1 bg-navy border border-white/10 text-white font-qaranta text-2xl text-center px-3 py-2.5 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {error && (
