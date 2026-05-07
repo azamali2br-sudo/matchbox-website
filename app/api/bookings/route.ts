@@ -7,7 +7,7 @@ const DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL
 function toBooking(row: Record<string, unknown>): Booking {
   return {
     id: row.id as string,
-    court: row.court as string,
+    court: row.court as 'A' | 'B',
     date: row.date as string,
     startTime: row.start_time as string,
     endTime: row.end_time as string,
