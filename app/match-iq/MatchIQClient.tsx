@@ -29,6 +29,7 @@ export default function MatchIQClient() {
   const [tab, setTab] = useState<'leaderboard' | 'matches'>('leaderboard')
   const [players, setPlayers] = useState<Player[]>([])
   const [matches, setMatches] = useState<Match[]>([])
+  const [totalMatches, setTotalMatches] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function MatchIQClient() {
       ])
       setPlayers(pr.players ?? [])
       setMatches(mr.matches ?? [])
+      setTotalMatches(mr.total ?? 0)
       setLoading(false)
     }
     load()
@@ -77,7 +79,7 @@ export default function MatchIQClient() {
         <div className="grid grid-cols-3 gap-4 mb-10">
           {[
             { label: 'Players', value: players.length || '—' },
-            { label: 'Matches Played', value: matches.length || '—' },
+            { label: 'Matches Played', value: totalMatches || '—' },
             { label: 'Starting Rating', value: 60 },
           ].map(s => (
             <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl p-5">
@@ -134,24 +136,26 @@ function Leaderboard({ players }: { players: Player[] }) {
   return (
     <div className="space-y-2">
       {/* Header row */}
-      <div className="grid grid-cols-[2rem_1fr_5rem_5rem_5rem] gap-4 px-5 pb-2">
+      <div className="grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 px-5 pb-2">
         <div />
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Rating</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-center">W / L</span>
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Matches</span>
+        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Win%</span>
       </div>
 
       {players.map((player, i) => {
         const rank = i + 1
         const rankColor = rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/25'
         const borderColor = rank === 1 ? 'border-yellow-400/20' : rank <= 3 ? 'border-orange/15' : 'border-white/6'
+        const matchesPlayed = player.wins + player.losses
+        const winRate = matchesPlayed > 0 ? Math.round((player.wins / matchesPlayed) * 100) : null
 
         return (
           <Link
             key={player.id}
             href={`/match-iq/${player.id}`}
-            className={`grid grid-cols-[2rem_1fr_5rem_5rem_5rem] gap-4 items-center bg-navy-card border ${borderColor} rounded-2xl px-5 py-4 hover:border-orange/30 transition-all group`}
+            className={`grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 items-center bg-navy-card border ${borderColor} rounded-2xl px-5 py-4 hover:border-orange/30 transition-all group`}
           >
             <span className={`font-qaranta text-lg ${rankColor}`}>{rank}</span>
             <div>
@@ -163,7 +167,9 @@ function Leaderboard({ players }: { players: Player[] }) {
               <span className="text-white/20 mx-1">/</span>
               <span className="text-red-400/70">{player.losses}</span>
             </p>
-            <p className="font-poppins text-white/40 text-xs text-right">{player.wins + player.losses}</p>
+            <p className="font-poppins text-white/40 text-xs text-right">
+              {winRate !== null ? `${winRate}%` : '—'}
+            </p>
           </Link>
         )
       })}
@@ -186,18 +192,18 @@ function RecentMatches({ matches }: { matches: Match[] }) {
       {matches.map(match => {
         const team1Won = match.team1_score > match.team2_score
         return (
-          <div key={match.id} className="bg-navy-card border border-white/6 rounded-2xl p-5">
+          <div key={match.id} className="bg-navy-card border border-white/6 rounded-2xl p-5 hover:border-white/15 transition-colors">
             <div className="flex items-center justify-between gap-4">
               {/* Team 1 */}
               <div className="flex-1 text-right">
-                <div className="space-y-0.5">
-                  <Link href={`/match-iq/${match.p1.id}`} className="block font-poppins text-sm text-white hover:text-orange transition-colors">{match.p1.name}</Link>
-                  <Link href={`/match-iq/${match.p2.id}`} className="block font-poppins text-sm text-white hover:text-orange transition-colors">{match.p2.name}</Link>
+                <div className="space-y-1">
+                  <Link href={`/match-iq/${match.p1.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${team1Won ? 'text-white' : 'text-white/45'}`}>{match.p1.name}</Link>
+                  <Link href={`/match-iq/${match.p2.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${team1Won ? 'text-white' : 'text-white/45'}`}>{match.p2.name}</Link>
                 </div>
               </div>
 
               {/* Score */}
-              <div className="text-center shrink-0">
+              <div className="text-center shrink-0 px-2">
                 <div className="flex items-center gap-3">
                   <span className={`font-qaranta text-3xl ${team1Won ? 'text-orange' : 'text-white/30'}`}>{match.team1_score}</span>
                   <span className="font-poppins text-white/20 text-xs">–</span>
@@ -215,9 +221,9 @@ function RecentMatches({ matches }: { matches: Match[] }) {
 
               {/* Team 2 */}
               <div className="flex-1">
-                <div className="space-y-0.5">
-                  <Link href={`/match-iq/${match.p3.id}`} className="block font-poppins text-sm text-white hover:text-orange transition-colors">{match.p3.name}</Link>
-                  <Link href={`/match-iq/${match.p4.id}`} className="block font-poppins text-sm text-white hover:text-orange transition-colors">{match.p4.name}</Link>
+                <div className="space-y-1">
+                  <Link href={`/match-iq/${match.p3.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${!team1Won ? 'text-white' : 'text-white/45'}`}>{match.p3.name}</Link>
+                  <Link href={`/match-iq/${match.p4.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${!team1Won ? 'text-white' : 'text-white/45'}`}>{match.p4.name}</Link>
                 </div>
               </div>
             </div>

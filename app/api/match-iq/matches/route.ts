@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const MATCH_SELECT = `
-  id, played_on, team1_score, team2_score, set_scores, status, submitted_by, created_at,
+  id, played_on, court, start_time, team1_score, team2_score, set_scores, status, submitted_by, created_at,
   p1:players!team1_p1(id, name, rating),
   p2:players!team1_p2(id, name, rating),
   p3:players!team2_p1(id, name, rating),
@@ -14,20 +14,26 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') ?? 'approved'
   const limit = parseInt(searchParams.get('limit') ?? '20')
 
-  const { data, error } = await supabaseAdmin
-    .from('matches')
-    .select(MATCH_SELECT)
-    .eq('status', status)
-    .order('played_on', { ascending: false })
-    .limit(limit)
+  const [{ data, error }, { count }] = await Promise.all([
+    supabaseAdmin
+      .from('matches')
+      .select(MATCH_SELECT)
+      .eq('status', status)
+      .order('played_on', { ascending: false })
+      .limit(limit),
+    supabaseAdmin
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status),
+  ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ matches: data ?? [] })
+  return NextResponse.json({ matches: data ?? [], total: count ?? 0 })
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { playedOn, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
+  const { playedOn, court, startTime, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
 
   if (!playedOn || !team1?.[0] || !team1?.[1] || !team2?.[0] || !team2?.[1]) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
 
   const playerIds: string[] = []
   for (const p of [...team1, ...team2]) {
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseAdmin
       .from('players')
       .select('id')
       .eq('phone', p.phone)
@@ -47,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (existing) {
       playerIds.push(existing.id)
     } else {
-      const { data: created, error } = await supabase
+      const { data: created, error } = await supabaseAdmin
         .from('players')
         .insert({ name: p.name, phone: p.phone })
         .select('id')
@@ -58,10 +64,12 @@ export async function POST(request: NextRequest) {
   }
 
   const [t1p1, t1p2, t2p1, t2p2] = playerIds
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('matches')
     .insert({
       played_on: playedOn,
+      court: court ?? null,
+      start_time: startTime ?? null,
       team1_p1: t1p1,
       team1_p2: t1p2,
       team2_p1: t2p1,

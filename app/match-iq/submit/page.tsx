@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { TIME_SLOTS, formatTime } from '@/lib/constants'
 
 type PlayerSlot = { name: string; phone: string; known: boolean; lookingUp: boolean }
 type SetScore = { t1: string; t2: string }
@@ -23,6 +24,8 @@ export default function SubmitMatchPage() {
   const [players, setPlayers] = useState<[PlayerSlot, PlayerSlot, PlayerSlot, PlayerSlot]>([
     emptySlot(), emptySlot(), emptySlot(), emptySlot(),
   ])
+  const [court, setCourt] = useState<'A' | 'B' | ''>('')
+  const [startTime, setStartTime] = useState('')
   const [team1Sets, setTeam1Sets] = useState('')
   const [team2Sets, setTeam2Sets] = useState('')
   const [showSetScores, setShowSetScores] = useState(false)
@@ -93,6 +96,19 @@ export default function SubmitMatchPage() {
         return
       }
     }
+    const phones = players.map(p => p.phone.trim())
+    if (new Set(phones).size < 4) {
+      setError('All 4 players must be different people. Duplicate phone number detected.')
+      return
+    }
+    if (!court) {
+      setError('Please select which court you played on.')
+      return
+    }
+    if (!startTime) {
+      setError('Please select the time slot you played.')
+      return
+    }
     if (!validScore) {
       setError('Score must be 2–0 or 2–1 (sets won, best of 3).')
       return
@@ -109,6 +125,8 @@ export default function SubmitMatchPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playedOn,
+          court,
+          startTime,
           team1: [players[0], players[1]],
           team2: [players[2], players[3]],
           team1Score: parseInt(team1Sets),
@@ -130,6 +148,8 @@ export default function SubmitMatchPage() {
   function reset() {
     setSuccess(false)
     setPlayers([emptySlot(), emptySlot(), emptySlot(), emptySlot()])
+    setCourt('')
+    setStartTime('')
     setTeam1Sets('')
     setTeam2Sets('')
     setShowSetScores(false)
@@ -176,16 +196,52 @@ export default function SubmitMatchPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Date */}
-          <div>
-            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Date Played</label>
-            <input
-              type="date"
-              value={playedOn}
-              max={new Date().toISOString().split('T')[0]}
-              onChange={e => setPlayedOn(e.target.value)}
-              className="bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors"
-            />
+          {/* Date + Court + Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Date Played</label>
+              <input
+                type="date"
+                value={playedOn}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={e => setPlayedOn(e.target.value)}
+                className="w-full bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Court</label>
+              <div className="flex gap-2 h-[46px]">
+                {(['A', 'B'] as const).map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setCourt(c)}
+                    className={`flex-1 rounded-xl font-poppins text-sm font-semibold border transition-all ${
+                      court === c
+                        ? 'bg-orange border-orange text-white'
+                        : 'bg-navy-card border-white/10 text-white/40 hover:text-white/70 hover:border-white/20'
+                    }`}
+                  >
+                    Box {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Start Time</label>
+              <select
+                value={startTime}
+                onChange={e => setStartTime(e.target.value)}
+                className="w-full bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors appearance-none"
+              >
+                <option value="" disabled>Select time</option>
+                {TIME_SLOTS.map(t => (
+                  <option key={t} value={t}>{formatTime(t)}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Teams */}

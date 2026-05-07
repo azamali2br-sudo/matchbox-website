@@ -52,24 +52,11 @@ export async function PATCH(
     [p4.id]: calcNewRating(p4.rating, !team1Won, t2Rating, t1Rating),
   }
 
-  // Update each player's rating, wins, losses
-  for (const [pid, newRating] of Object.entries(newRatings)) {
-    const won = team1Won ? [p1.id, p2.id].includes(pid) : [p3.id, p4.id].includes(pid)
-    await supabaseAdmin
-      .from('players')
-      .update({
-        rating: newRating,
-        wins: won ? { increment: 1 } : undefined,
-        losses: !won ? { increment: 1 } : undefined,
-      })
-      .eq('id', pid)
-  }
-
-  // Re-fetch updated players for wins/losses increment (Supabase doesn't support increment via update directly)
+  // Fetch current wins/losses, then update rating + increment correctly
   const playerIds = [p1.id, p2.id, p3.id, p4.id]
   const { data: currentPlayers } = await supabaseAdmin
     .from('players')
-    .select('id, wins, losses, rating')
+    .select('id, wins, losses')
     .in('id', playerIds)
 
   for (const player of currentPlayers ?? []) {

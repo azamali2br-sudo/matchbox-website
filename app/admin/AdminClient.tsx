@@ -383,6 +383,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 type PendingMatch = {
   id: string
   played_on: string
+  court: string | null
+  start_time: string | null
   team1_score: number
   team2_score: number
   submitted_by: string
@@ -457,6 +459,8 @@ function MatchIQAdmin() {
                   </div>
                   <p className="font-poppins text-white/30 text-xs">
                     Played {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {match.court && ` · Box ${match.court}`}
+                    {match.start_time && ` · ${formatTime(match.start_time)}`}
                     {' · '}Submitted by {match.submitted_by}
                   </p>
                 </div>

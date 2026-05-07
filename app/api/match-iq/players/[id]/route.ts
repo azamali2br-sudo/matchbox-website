@@ -23,7 +23,7 @@ export async function GET(
     supabase
       .from('matches')
       .select(`
-        id, played_on, team1_score, team2_score, status, created_at,
+        id, played_on, team1_score, team2_score, set_scores, status, created_at,
         p1:players!team1_p1(id, name, rating),
         p2:players!team1_p2(id, name, rating),
         p3:players!team2_p1(id, name, rating),

@@ -185,14 +185,14 @@ function RatingGraph({ points }: { points: RatingPoint[] }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 120 }}>
         <defs>
           <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#F68E3B" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#F68E3B" stopOpacity="0" />
+            <stop offset="0%" stopColor={trending ? '#F68E3B' : '#ef4444'} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={trending ? '#F68E3B' : '#ef4444'} stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={areaD} fill="url(#rg)" />
-        <path d={pathD} fill="none" stroke={trending ? '#F68E3B' : '#F68E3B'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={pathD} fill="none" stroke={trending ? '#F68E3B' : '#ef4444'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {points.map((p, i) => (
-          <circle key={i} cx={toX(i)} cy={toY(p.rating)} r="3" fill="#F68E3B" />
+          <circle key={i} cx={toX(i)} cy={toY(p.rating)} r="3" fill={trending ? '#F68E3B' : '#ef4444'} />
         ))}
       </svg>
       <div className="flex justify-between mt-2">
