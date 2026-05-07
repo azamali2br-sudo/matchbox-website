@@ -16,5 +16,5 @@ export function calcNewRating(current: number, won: boolean, myTeam: number, opp
   const expected = expectedScore(myTeam, opponentTeam)
   const delta = ELO_K * (actual - expected)
   const next = current + delta
-  return Math.round(Math.min(ELO_CEILING, Math.max(ELO_FLOOR, next)) * 10) / 10
+  return Math.round(Math.min(ELO_CEILING, Math.max(ELO_FLOOR, next)))
 }

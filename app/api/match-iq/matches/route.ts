@@ -28,7 +28,25 @@ export async function GET(request: NextRequest) {
   ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ matches: data ?? [], total: count ?? 0 })
+
+  const matches = data ?? []
+
+  // For approved matches, attach ratings at time of match from rating_history
+  let matchRatings: Record<string, Record<string, number>> = {}
+  if (status === 'approved' && matches.length > 0) {
+    const matchIds = matches.map((m: { id: string }) => m.id)
+    const { data: historyRows } = await supabaseAdmin
+      .from('rating_history')
+      .select('match_id, player_id, rating')
+      .in('match_id', matchIds)
+
+    for (const row of historyRows ?? []) {
+      if (!matchRatings[row.match_id]) matchRatings[row.match_id] = {}
+      matchRatings[row.match_id][row.player_id] = row.rating
+    }
+  }
+
+  return NextResponse.json({ matches, matchRatings, total: count ?? 0 })
 }
 
 export async function POST(request: NextRequest) {

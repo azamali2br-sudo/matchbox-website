@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { formatTime } from '@/lib/constants'
 
 type Player = {
   id: string
@@ -16,6 +17,8 @@ type SetScore = { t1: number; t2: number }
 type Match = {
   id: string
   played_on: string
+  court: string | null
+  start_time: string | null
   team1_score: number
   team2_score: number
   set_scores: SetScore[] | null
@@ -29,6 +32,7 @@ export default function MatchIQClient() {
   const [tab, setTab] = useState<'leaderboard' | 'matches'>('leaderboard')
   const [players, setPlayers] = useState<Player[]>([])
   const [matches, setMatches] = useState<Match[]>([])
+  const [matchRatings, setMatchRatings] = useState<Record<string, Record<string, number>>>({})
   const [totalMatches, setTotalMatches] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -41,6 +45,7 @@ export default function MatchIQClient() {
       ])
       setPlayers(pr.players ?? [])
       setMatches(mr.matches ?? [])
+      setMatchRatings(mr.matchRatings ?? {})
       setTotalMatches(mr.total ?? 0)
       setLoading(false)
     }
@@ -113,7 +118,7 @@ export default function MatchIQClient() {
         ) : tab === 'leaderboard' ? (
           <Leaderboard players={players} />
         ) : (
-          <RecentMatches matches={matches} />
+          <RecentMatches matches={matches} matchRatings={matchRatings} />
         )}
       </div>
     </div>
@@ -161,7 +166,7 @@ function Leaderboard({ players }: { players: Player[] }) {
             <div>
               <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors">{player.name}</p>
             </div>
-            <p className="font-qaranta text-xl text-orange text-right">{player.rating}</p>
+            <p className="font-qaranta text-xl text-orange text-right">{Math.round(player.rating)}</p>
             <p className="font-poppins text-white/50 text-xs text-center">
               <span className="text-green-400">{player.wins}</span>
               <span className="text-white/20 mx-1">/</span>
@@ -177,7 +182,7 @@ function Leaderboard({ players }: { players: Player[] }) {
   )
 }
 
-function RecentMatches({ matches }: { matches: Match[] }) {
+function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatings: Record<string, Record<string, number>> }) {
   if (matches.length === 0) {
     return (
       <div className="text-center py-24">
@@ -191,42 +196,98 @@ function RecentMatches({ matches }: { matches: Match[] }) {
     <div className="space-y-3">
       {matches.map(match => {
         const team1Won = match.team1_score > match.team2_score
+        const ratings = matchRatings[match.id] ?? {}
+
+        const r1 = Math.round(ratings[match.p1.id] ?? match.p1.rating)
+        const r2 = Math.round(ratings[match.p2.id] ?? match.p2.rating)
+        const r3 = Math.round(ratings[match.p3.id] ?? match.p3.rating)
+        const r4 = Math.round(ratings[match.p4.id] ?? match.p4.rating)
+
+        const avg1 = Math.round((r1 + r2) / 2)
+        const avg2 = Math.round((r3 + r4) / 2)
+        const ratingGap = Math.abs(avg1 - avg2)
+        const isUpset = (team1Won && avg1 < avg2) || (!team1Won && avg2 < avg1)
+
+        const winnerBorder = team1Won ? 'border-l-orange/40' : 'border-r-orange/40'
+
         return (
-          <div key={match.id} className="bg-navy-card border border-white/6 rounded-2xl p-5 hover:border-white/15 transition-colors">
-            <div className="flex items-center justify-between gap-4">
-              {/* Team 1 */}
-              <div className="flex-1 text-right">
-                <div className="space-y-1">
-                  <Link href={`/match-iq/${match.p1.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${team1Won ? 'text-white' : 'text-white/45'}`}>{match.p1.name}</Link>
-                  <Link href={`/match-iq/${match.p2.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${team1Won ? 'text-white' : 'text-white/45'}`}>{match.p2.name}</Link>
-                </div>
+          <div key={match.id} className={`bg-navy-card border border-white/6 rounded-2xl overflow-hidden hover:border-white/15 transition-colors border-l-2 border-r-2 ${winnerBorder}`}>
+
+            {/* Main content */}
+            <div className="flex items-center gap-3 px-5 py-5">
+
+              {/* Team 1 — right aligned */}
+              <div className="flex-1 text-right space-y-2.5">
+                {[{ p: match.p1, r: r1 }, { p: match.p2, r: r2 }].map(({ p, r }) => (
+                  <div key={p.id} className="flex items-center justify-end gap-2">
+                    <Link
+                      href={`/match-iq/${p.id}`}
+                      className={`font-poppins text-sm font-medium hover:underline transition-colors leading-tight ${team1Won ? 'text-white' : 'text-white/40'}`}
+                    >
+                      {p.name}
+                    </Link>
+                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${
+                      team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'
+                    }`}>
+                      {r}
+                    </span>
+                  </div>
+                ))}
               </div>
 
               {/* Score */}
-              <div className="text-center shrink-0 px-2">
-                <div className="flex items-center gap-3">
-                  <span className={`font-qaranta text-3xl ${team1Won ? 'text-orange' : 'text-white/30'}`}>{match.team1_score}</span>
-                  <span className="font-poppins text-white/20 text-xs">–</span>
-                  <span className={`font-qaranta text-3xl ${!team1Won ? 'text-orange' : 'text-white/30'}`}>{match.team2_score}</span>
+              <div className="shrink-0 text-center w-28">
+                {ratingGap >= 5 && (
+                  <p className="font-poppins text-white/20 text-xs mb-1.5 tracking-wide">
+                    {avg1} <span className="text-white/10 mx-0.5">·</span> {avg2}
+                  </p>
+                )}
+                <div className="flex items-center justify-center gap-2.5">
+                  <span className={`font-qaranta text-4xl leading-none ${team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team1_score}</span>
+                  <span className="font-poppins text-white/15 text-base">–</span>
+                  <span className={`font-qaranta text-4xl leading-none ${!team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team2_score}</span>
                 </div>
                 {match.set_scores && (
-                  <p className="font-poppins text-white/25 text-xs mt-1">
+                  <p className="font-poppins text-white/20 text-xs mt-1.5">
                     {match.set_scores.map(s => `${s.t1}–${s.t2}`).join(', ')}
                   </p>
                 )}
-                <p className="font-poppins text-white/20 text-xs mt-1">
-                  {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}
-                </p>
               </div>
 
-              {/* Team 2 */}
-              <div className="flex-1">
-                <div className="space-y-1">
-                  <Link href={`/match-iq/${match.p3.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${!team1Won ? 'text-white' : 'text-white/45'}`}>{match.p3.name}</Link>
-                  <Link href={`/match-iq/${match.p4.id}`} className={`block font-poppins text-sm font-medium hover:underline transition-colors ${!team1Won ? 'text-white' : 'text-white/45'}`}>{match.p4.name}</Link>
-                </div>
+              {/* Team 2 — left aligned */}
+              <div className="flex-1 space-y-2.5">
+                {[{ p: match.p3, r: r3 }, { p: match.p4, r: r4 }].map(({ p, r }) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${
+                      !team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'
+                    }`}>
+                      {r}
+                    </span>
+                    <Link
+                      href={`/match-iq/${p.id}`}
+                      className={`font-poppins text-sm font-medium hover:underline transition-colors leading-tight ${!team1Won ? 'text-white' : 'text-white/40'}`}
+                    >
+                      {p.name}
+                    </Link>
+                  </div>
+                ))}
               </div>
             </div>
+
+            {/* Footer */}
+            <div className="border-t border-white/5 px-5 py-2.5 flex items-center justify-between">
+              <p className="font-poppins text-white/25 text-xs">
+                {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {match.court && <> · Box {match.court}</>}
+                {match.start_time && <> · {formatTime(match.start_time)}</>}
+              </p>
+              {isUpset && (
+                <span className="font-poppins text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-full px-2.5 py-0.5 tracking-widest uppercase">
+                  Upset
+                </span>
+              )}
+            </div>
+
           </div>
         )
       })}

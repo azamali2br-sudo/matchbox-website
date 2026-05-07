@@ -77,7 +77,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
               </p>
             </div>
             <div className="text-right shrink-0">
-              <div className="font-qaranta text-6xl text-orange">{player.rating}</div>
+              <div className="font-qaranta text-6xl text-orange">{Math.round(player.rating)}</div>
               <div className="font-poppins text-white/40 text-xs uppercase tracking-widest mt-1">Rating</div>
             </div>
           </div>
