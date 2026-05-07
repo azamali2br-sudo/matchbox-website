@@ -1,0 +1,253 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+
+type PlayerSlot = { name: string; phone: string; known: boolean; lookingUp: boolean }
+
+const emptySlot = (): PlayerSlot => ({ name: '', phone: '', known: false, lookingUp: false })
+
+export default function SubmitMatchPage() {
+  const [players, setPlayers] = useState<[PlayerSlot, PlayerSlot, PlayerSlot, PlayerSlot]>([
+    emptySlot(), emptySlot(), emptySlot(), emptySlot(),
+  ])
+  const [team1Score, setTeam1Score] = useState('')
+  const [team2Score, setTeam2Score] = useState('')
+  const [playedOn, setPlayedOn] = useState(new Date().toISOString().split('T')[0])
+  const [submitterPhone, setSubmitterPhone] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
+
+  function updateSlot(i: number, fields: Partial<PlayerSlot>) {
+    setPlayers(prev => {
+      const next = [...prev] as typeof prev
+      next[i] = { ...next[i], ...fields }
+      return next
+    })
+  }
+
+  async function lookupPhone(i: number, phone: string) {
+    if (phone.length < 7) return
+    updateSlot(i, { lookingUp: true })
+    try {
+      const res = await fetch(`/api/match-iq/players?phone=${encodeURIComponent(phone)}`)
+      const data = await res.json()
+      if (data.player) {
+        updateSlot(i, { name: data.player.name, known: true, lookingUp: false })
+      } else {
+        updateSlot(i, { known: false, lookingUp: false })
+      }
+    } catch {
+      updateSlot(i, { lookingUp: false })
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    for (let i = 0; i < 4; i++) {
+      if (!players[i].name.trim() || !players[i].phone.trim()) {
+        setError(`Player ${i + 1} name and phone are required.`)
+        return
+      }
+    }
+    if (!team1Score || !team2Score) {
+      setError('Both scores are required.')
+      return
+    }
+    if (team1Score === team2Score) {
+      setError('Padel matches cannot end in a draw.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/match-iq/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playedOn,
+          team1: [players[0], players[1]],
+          team2: [players[2], players[3]],
+          team1Score: parseInt(team1Score),
+          team2Score: parseInt(team2Score),
+          submittedBy: submitterPhone || players[0].phone,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Submission failed.'); return }
+      setSuccess(true)
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-20 px-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mx-auto mb-6">
+            <svg className="w-9 h-9 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="font-qaranta text-4xl text-white uppercase mb-4">Match Submitted</h2>
+          <p className="font-poppins text-white/50 text-sm mb-2">
+            Your match is pending admin approval. Ratings will update once confirmed.
+          </p>
+          <p className="font-poppins text-white/30 text-xs mb-10">
+            Usually approved within a few hours.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Link
+              href="/match-iq"
+              className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all"
+            >
+              View Leaderboard
+            </Link>
+            <button
+              onClick={() => { setSuccess(false); setPlayers([emptySlot(), emptySlot(), emptySlot(), emptySlot()]); setTeam1Score(''); setTeam2Score('') }}
+              className="font-poppins text-white/40 text-sm hover:text-white/70 transition-colors"
+            >
+              Submit Another Match
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-navy pt-20">
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <Link href="/match-iq" className="inline-flex items-center gap-2 font-poppins text-white/40 text-sm hover:text-white/70 transition-colors mb-8">
+          ← Match IQ
+        </Link>
+
+        <h1 className="font-qaranta text-5xl text-white uppercase mb-2">Submit <span className="text-orange">Match</span></h1>
+        <p className="font-poppins text-white/40 text-sm mb-10">
+          Enter all 4 players and the final score. Your match will be reviewed before ratings update.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Date */}
+          <div>
+            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Date Played</label>
+            <input
+              type="date"
+              value={playedOn}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e => setPlayedOn(e.target.value)}
+              className="bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors"
+            />
+          </div>
+
+          {/* Teams */}
+          {(['Team 1', 'Team 2'] as const).map((teamLabel, teamIdx) => (
+            <div key={teamLabel} className={`rounded-2xl border p-6 ${teamIdx === 0 ? 'border-orange/20 bg-orange/5' : 'border-white/8 bg-navy-card'}`}>
+              <div className="flex items-center gap-2 mb-5">
+                <span className={`w-2 h-2 rounded-full ${teamIdx === 0 ? 'bg-orange' : 'bg-white/30'}`} />
+                <span className="font-poppins text-white/70 text-xs font-semibold uppercase tracking-widest">{teamLabel}</span>
+              </div>
+
+              <div className="space-y-4">
+                {[0, 1].map(slotOffset => {
+                  const i = teamIdx * 2 + slotOffset
+                  const slot = players[i]
+                  return (
+                    <div key={i} className="grid grid-cols-2 gap-3">
+                      <div className="relative">
+                        <input
+                          type="tel"
+                          placeholder={`Player ${slotOffset + 1} phone`}
+                          value={slot.phone}
+                          onChange={e => updateSlot(i, { phone: e.target.value, known: false })}
+                          onBlur={e => lookupPhone(i, e.target.value)}
+                          className="w-full bg-navy border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/20"
+                        />
+                        {slot.lookingUp && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange/40 border-t-orange rounded-full animate-spin" />
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Full name"
+                          value={slot.name}
+                          readOnly={slot.known}
+                          onChange={e => updateSlot(i, { name: e.target.value })}
+                          className={`w-full border font-poppins text-sm px-4 py-3 rounded-xl outline-none transition-colors placeholder:text-white/20 ${
+                            slot.known
+                              ? 'bg-green-500/5 border-green-500/25 text-green-300 cursor-default'
+                              : 'bg-navy border-white/10 text-white focus:border-orange/50'
+                          }`}
+                        />
+                        {slot.known && (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Score */}
+          <div className="bg-navy-card border border-white/8 rounded-2xl p-6">
+            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-4">Final Score</label>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="font-poppins text-orange text-xs mb-2">Team 1</p>
+                <input
+                  type="number"
+                  min={0}
+                  max={20}
+                  placeholder="0"
+                  value={team1Score}
+                  onChange={e => setTeam1Score(e.target.value)}
+                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                />
+              </div>
+              <span className="font-poppins text-white/20 text-lg mt-6">vs</span>
+              <div className="flex-1">
+                <p className="font-poppins text-white/40 text-xs mb-2">Team 2</p>
+                <input
+                  type="number"
+                  min={0}
+                  max={20}
+                  placeholder="0"
+                  value={team2Score}
+                  onChange={e => setTeam2Score(e.target.value)}
+                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+              <p className="font-poppins text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-orange hover:bg-orange-dark disabled:opacity-50 text-white font-poppins font-semibold text-sm py-4 rounded-full transition-all hover:shadow-xl hover:shadow-orange/30"
+          >
+            {submitting ? 'Submitting...' : 'Submit Match for Review'}
+          </button>
+
+          <p className="font-poppins text-white/25 text-xs text-center">
+            New players are automatically registered on their first match.
+          </p>
+        </form>
+      </div>
+    </div>
+  )
+}

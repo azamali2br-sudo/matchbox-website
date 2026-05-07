@@ -86,7 +86,10 @@ export default function AdminClient() {
   return <Dashboard onLogout={() => { sessionStorage.removeItem('mbx_admin'); setAuthed(false) }} />
 }
 
+type AdminTab = 'bookings' | 'matchiq'
+
 function Dashboard({ onLogout }: { onLogout: () => void }) {
+  const [adminTab, setAdminTab] = useState<AdminTab>('bookings')
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [filterCourt, setFilterCourt] = useState<FilterCourt>('all')
@@ -174,6 +177,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             )}
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/match-iq" className="font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
+              Match IQ ↗
+            </Link>
             <Link href="/booking" className="font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
               Booking Page ↗
             </Link>
@@ -188,6 +194,25 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-10">
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-8">
+          {(['bookings', 'matchiq'] as AdminTab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setAdminTab(t)}
+              className={`font-poppins text-xs font-semibold px-5 py-2.5 rounded-lg transition-all ${
+                adminTab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              {t === 'bookings' ? 'Bookings' : 'Match IQ'}
+            </button>
+          ))}
+        </div>
+
+        {adminTab === 'matchiq' ? (
+          <MatchIQAdmin />
+        ) : (
+        <>
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
@@ -348,7 +373,114 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               ))}
           </div>
         )}
+        </>
+        )}
       </div>
+    </div>
+  )
+}
+
+type PendingMatch = {
+  id: string
+  played_on: string
+  team1_score: number
+  team2_score: number
+  submitted_by: string
+  created_at: string
+  p1: { id: string; name: string }
+  p2: { id: string; name: string }
+  p3: { id: string; name: string }
+  p4: { id: string; name: string }
+}
+
+function MatchIQAdmin() {
+  const [pending, setPending] = useState<PendingMatch[]>([])
+  const [loading, setLoading] = useState(true)
+  const [acting, setActing] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const res = await fetch('/api/match-iq/matches?status=pending&limit=50')
+    const data = await res.json()
+    setPending(data.matches ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function act(id: string, action: 'approve' | 'reject') {
+    setActing(id)
+    await fetch(`/api/match-iq/matches/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    setPending(prev => prev.filter(m => m.id !== id))
+    setActing(null)
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="font-qaranta text-2xl text-white uppercase">Pending Matches</h2>
+          <p className="font-poppins text-white/35 text-xs mt-1">Approve to update player ratings</p>
+        </div>
+        <button onClick={load} className="font-poppins text-xs text-orange border border-orange/30 hover:border-orange px-3 py-2 rounded-xl transition-colors">
+          ↻ Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-20 bg-navy-card rounded-2xl animate-pulse" />)}</div>
+      ) : pending.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="font-qaranta text-3xl text-white/20 uppercase mb-2">All Clear</p>
+          <p className="font-poppins text-white/30 text-sm">No pending match submissions.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pending.map(match => (
+            <div key={match.id} className="bg-navy-card border border-amber-400/20 rounded-2xl p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="font-poppins text-white text-sm font-semibold">
+                      {match.p1.name} &amp; {match.p2.name}
+                    </span>
+                    <span className="font-qaranta text-xl text-orange">{match.team1_score}</span>
+                    <span className="font-poppins text-white/30 text-xs">vs</span>
+                    <span className="font-qaranta text-xl text-white/50">{match.team2_score}</span>
+                    <span className="font-poppins text-white/50 text-sm">
+                      {match.p3.name} &amp; {match.p4.name}
+                    </span>
+                  </div>
+                  <p className="font-poppins text-white/30 text-xs">
+                    Played {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {' · '}Submitted by {match.submitted_by}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => act(match.id, 'approve')}
+                    disabled={acting === match.id}
+                    className="bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 text-green-400 font-poppins text-xs font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {acting === match.id ? '...' : '✓ Approve'}
+                  </button>
+                  <button
+                    onClick={() => act(match.id, 'reject')}
+                    disabled={acting === match.id}
+                    className="bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 font-poppins text-xs font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
