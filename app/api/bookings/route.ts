@@ -4,6 +4,25 @@ import { generateBookingRef, getTotalPrice, addHoursToTime, HOLD_DURATION_MINUTE
 
 const DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL
 
+function toBooking(row: Record<string, unknown>): Booking {
+  return {
+    id: row.id as string,
+    court: row.court as string,
+    date: row.date as string,
+    startTime: row.start_time as string,
+    endTime: row.end_time as string,
+    durationHours: row.duration_hours as number,
+    name: row.name as string,
+    phone: row.phone as string,
+    email: row.email as string,
+    status: row.status as 'pending' | 'confirmed' | 'cancelled',
+    totalPrice: row.total_price as number,
+    ref: row.ref as string,
+    createdAt: row.created_at as string,
+    holdExpiresAt: row.hold_expires_at as string | undefined,
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const date = searchParams.get('date')
@@ -17,18 +36,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ bookings, demoMode: true })
   }
 
-  // ── Supabase implementation (uncomment when connected) ──────────────────
-  // const { createClient } = await import('@/lib/supabase')
-  // const supabase = createClient()
-  // let query = supabase.from('bookings').select('*').neq('status', 'cancelled')
-  // if (date) query = query.eq('date', date)
-  // if (court) query = query.eq('court', court)
-  // const { data, error } = await query
-  // if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  // return NextResponse.json({ bookings: data })
-  // ────────────────────────────────────────────────────────────────────────
+  const { supabase } = await import('@/lib/supabase')
 
-  return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  // Expire pending holds
+  await supabase
+    .from('bookings')
+    .update({ status: 'cancelled' })
+    .eq('status', 'pending')
+    .lt('hold_expires_at', new Date().toISOString())
+
+  let query = supabase.from('bookings').select('*').neq('status', 'cancelled')
+  if (date) query = query.eq('date', date)
+  if (court) query = query.eq('court', court)
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ bookings: (data ?? []).map(toBooking) })
 }
 
 export async function POST(request: NextRequest) {
@@ -39,35 +63,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const newBooking: Booking = {
-    id: Math.random().toString(36).slice(2),
-    court,
-    date,
-    startTime,
-    endTime: addHoursToTime(startTime, durationHours),
-    durationHours,
-    name,
-    phone,
-    email,
-    status: 'pending',
-    totalPrice: getTotalPrice(startTime, durationHours),
-    ref: generateBookingRef(),
-    createdAt: new Date().toISOString(),
-    holdExpiresAt: new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000).toISOString(),
-  }
+  const holdExpiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000).toISOString()
 
   if (DEMO_MODE) {
+    const newBooking: Booking = {
+      id: Math.random().toString(36).slice(2),
+      court,
+      date,
+      startTime,
+      endTime: addHoursToTime(startTime, durationHours),
+      durationHours,
+      name,
+      phone,
+      email,
+      status: 'pending',
+      totalPrice: getTotalPrice(startTime, durationHours),
+      ref: generateBookingRef(),
+      createdAt: new Date().toISOString(),
+      holdExpiresAt,
+    }
     addDemoBooking(newBooking)
     return NextResponse.json({ booking: newBooking, demoMode: true })
   }
 
-  // ── Supabase implementation ──────────────────────────────────────────────
-  // const { createClient } = await import('@/lib/supabase')
-  // const supabase = createClient()
-  // const { data, error } = await supabase.from('bookings').insert(newBooking).select().single()
-  // if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  // return NextResponse.json({ booking: data })
-  // ────────────────────────────────────────────────────────────────────────
+  const { supabase } = await import('@/lib/supabase')
 
-  return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  const row = {
+    court,
+    date,
+    start_time: startTime,
+    end_time: addHoursToTime(startTime, durationHours),
+    duration_hours: durationHours,
+    name,
+    phone,
+    email,
+    status: 'pending',
+    total_price: getTotalPrice(startTime, durationHours),
+    ref: generateBookingRef(),
+    hold_expires_at: holdExpiresAt,
+  }
+
+  const { data, error } = await supabase.from('bookings').insert(row).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ booking: toBooking(data) })
 }

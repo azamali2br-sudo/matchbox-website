@@ -16,15 +16,16 @@ export async function PATCH(
     return NextResponse.json({ booking: updated, demoMode: true })
   }
 
-  // ── Supabase implementation ──────────────────────────────────────────────
-  // const { createClient } = await import('@/lib/supabase')
-  // const supabase = createClient()
-  // const { data, error } = await supabase.from('bookings').update(body).eq('id', id).select().single()
-  // if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  // return NextResponse.json({ booking: data })
-  // ────────────────────────────────────────────────────────────────────────
+  const { supabaseAdmin } = await import('@/lib/supabase')
+  const { data, error } = await supabaseAdmin
+    .from('bookings')
+    .update(body)
+    .eq('id', id)
+    .select()
+    .single()
 
-  return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ booking: data })
 }
 
 export async function DELETE(
@@ -39,13 +40,8 @@ export async function DELETE(
     return NextResponse.json({ success: true, demoMode: true })
   }
 
-  // ── Supabase implementation ──────────────────────────────────────────────
-  // const { createClient } = await import('@/lib/supabase')
-  // const supabase = createClient()
-  // const { error } = await supabase.from('bookings').delete().eq('id', id)
-  // if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  // return NextResponse.json({ success: true })
-  // ────────────────────────────────────────────────────────────────────────
-
-  return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+  const { supabaseAdmin } = await import('@/lib/supabase')
+  const { error } = await supabaseAdmin.from('bookings').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
 }
