@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (data ?? []) as Record<string, unknown>[]
+  const rows = (data ?? []) as unknown as Record<string, unknown>[]
   return NextResponse.json({
     bookings: rows.map(r => (isAdmin ? toBooking(r) : stripPii(toBooking({ ...r, name: '', phone: '', email: '', total_price: 0, ref: '', created_at: '' })))),
   })
