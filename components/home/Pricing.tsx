@@ -21,13 +21,13 @@ const plans = [
 
 export default function Pricing() {
   return (
-    <section className="bg-navy-dark py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="bg-navy-dark py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-16">
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">
             Pricing
           </p>
-          <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+          <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
             Book Your<br />Court
           </h2>
           <p className="font-poppins text-white/50 text-base mt-5 max-w-md mx-auto">

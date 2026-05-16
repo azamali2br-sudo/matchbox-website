@@ -210,13 +210,13 @@ export default function BookingClient() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Header */}
-        <div className="mb-10">
+        <div className="mb-8 sm:mb-10">
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-3">
             Matchbox Padel Club
           </p>
-          <h1 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+          <h1 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
             Book a Court
           </h1>
           <p className="font-poppins text-white/50 text-sm mt-3">
@@ -287,7 +287,7 @@ export default function BookingClient() {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-5 mb-5">
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-4 gap-y-2 sm:gap-5 mb-5">
               {[
                 { color: 'bg-white/40', label: 'Available' },
                 { color: 'bg-orange', label: 'Peak hour' },

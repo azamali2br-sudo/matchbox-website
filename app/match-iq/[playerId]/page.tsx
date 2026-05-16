@@ -62,22 +62,22 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 
   return (
     <div className="min-h-screen bg-navy pt-28">
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <Link href="/match-iq" className="inline-flex items-center gap-2 font-poppins text-white/40 text-sm hover:text-white/70 transition-colors mb-8">
           ← Leaderboard
         </Link>
 
         {/* Player header */}
-        <div className="bg-navy-card border border-white/8 rounded-3xl p-8 mb-6">
+        <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8 mb-6">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="font-qaranta text-5xl text-white uppercase">{player.name}</h1>
-              <p className="font-poppins text-white/40 text-sm mt-2">
+            <div className="min-w-0 flex-1">
+              <h1 className="font-qaranta text-3xl sm:text-4xl md:text-5xl text-white uppercase break-words">{player.name}</h1>
+              <p className="font-poppins text-white/40 text-xs sm:text-sm mt-2">
                 Member since {new Date(player.created_at).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}
               </p>
             </div>
             <div className="text-right shrink-0">
-              <div className="font-qaranta text-6xl text-orange">{Math.round(player.rating)}</div>
+              <div className="font-qaranta text-4xl sm:text-5xl md:text-6xl text-orange">{Math.round(player.rating)}</div>
               <div className="font-poppins text-white/40 text-xs uppercase tracking-widest mt-1">Rating</div>
             </div>
           </div>
@@ -99,7 +99,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 
         {/* Rating graph */}
         {history.length > 1 && (
-          <div className="bg-navy-card border border-white/8 rounded-3xl p-8 mb-6">
+          <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8 mb-6">
             <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-6">Rating History</h2>
             <RatingGraph points={history} />
           </div>
@@ -107,7 +107,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 
         {/* Match history */}
         {matches.length > 0 && (
-          <div className="bg-navy-card border border-white/8 rounded-3xl p-8">
+          <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8">
             <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-6">Match History</h2>
             <div className="space-y-3">
               {matches.map(match => {

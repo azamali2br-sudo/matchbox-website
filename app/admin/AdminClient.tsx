@@ -166,24 +166,26 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-navy">
       {/* Top nav */}
-      <div className="sticky top-0 z-50 bg-navy-dark border-b border-white/8 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-orange/15 flex items-center justify-center">
+      <div className="sticky top-0 z-50 bg-navy-dark border-b border-white/8 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-orange/15 flex items-center justify-center shrink-0">
               <span className="font-qaranta text-orange text-sm">M</span>
             </div>
-            <span className="font-qaranta text-white uppercase text-lg">Matchbox Admin</span>
+            <span className="font-qaranta text-white uppercase text-base sm:text-lg truncate">
+              <span className="hidden sm:inline">Matchbox </span>Admin
+            </span>
             {demoMode && (
-              <span className="font-poppins text-xs bg-orange/10 text-orange border border-orange/20 rounded-full px-2 py-0.5">
+              <span className="font-poppins text-xs bg-orange/10 text-orange border border-orange/20 rounded-full px-2 py-0.5 shrink-0">
                 Demo
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/match-iq" className="font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+            <Link href="/match-iq" className="hidden sm:inline font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
               Match IQ ↗
             </Link>
-            <Link href="/booking" className="font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
+            <Link href="/booking" className="hidden sm:inline font-poppins text-white/40 text-xs hover:text-white/70 transition-colors">
               Booking Page ↗
             </Link>
             <button
@@ -196,7 +198,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Tab switcher */}
         <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-8">
           {(['bookings', 'matchiq'] as AdminTab[]).map(t => (
@@ -306,7 +308,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     {/* Left info */}
-                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 min-w-0">
                       <div>
                         <p className="font-poppins text-white/35 text-xs uppercase tracking-wider">Court & Time</p>
                         <p className="font-poppins text-white text-sm font-medium mt-0.5">

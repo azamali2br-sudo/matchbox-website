@@ -2,8 +2,8 @@ import Image from "next/image";
 
 export default function Gallery() {
   return (
-    <section className="bg-navy-dark py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="bg-navy-dark py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">
             The Experience

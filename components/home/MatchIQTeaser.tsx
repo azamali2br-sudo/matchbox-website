@@ -23,9 +23,9 @@ export default function MatchIQTeaser() {
   }, []);
 
   return (
-    <section className="bg-navy py-24 md:py-32 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+    <section className="bg-navy py-16 md:py-32 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left — Copy */}
           <div>
             <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2 mb-8">
@@ -35,7 +35,7 @@ export default function MatchIQTeaser() {
               </span>
             </div>
 
-            <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight mb-6">
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight mb-6">
               Introducing<br />
               <span className="text-orange">Match IQ</span>
             </h2>
@@ -79,7 +79,7 @@ export default function MatchIQTeaser() {
 
             <div className="relative bg-navy-card rounded-3xl border border-white/8 overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/8">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-5 border-b border-white/8">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-orange/15 border border-orange/25 flex items-center justify-center">
                     <svg className="w-4 h-4 text-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,7 +92,7 @@ export default function MatchIQTeaser() {
               </div>
 
               {/* Column headers */}
-              <div className="grid grid-cols-12 gap-2 px-6 py-3 border-b border-white/5">
+              <div className="grid grid-cols-12 gap-2 px-4 sm:px-6 py-3 border-b border-white/5">
                 <span className="col-span-1 font-poppins text-white/30 text-xs">#</span>
                 <span className="col-span-5 font-poppins text-white/30 text-xs">Player</span>
                 <span className="col-span-3 font-poppins text-white/30 text-xs text-center">Matches</span>
@@ -101,11 +101,11 @@ export default function MatchIQTeaser() {
 
               {/* Players */}
               {loading ? (
-                <div className="px-6 py-12 text-center">
+                <div className="px-4 sm:px-6 py-12 text-center">
                   <span className="font-poppins text-white/30 text-sm">Loading leaderboard…</span>
                 </div>
               ) : players.length === 0 ? (
-                <div className="px-6 py-12 text-center">
+                <div className="px-4 sm:px-6 py-12 text-center">
                   <span className="font-poppins text-white/30 text-sm">No players yet — be the first.</span>
                 </div>
               ) : (
@@ -114,7 +114,7 @@ export default function MatchIQTeaser() {
                   return (
                     <div
                       key={player.id}
-                      className={`grid grid-cols-12 gap-2 items-center px-6 py-4 ${
+                      className={`grid grid-cols-12 gap-2 items-center px-4 sm:px-6 py-4 ${
                         i < players.length - 1 ? "border-b border-white/5" : ""
                       } ${i === 0 ? "bg-orange/5" : ""}`}
                     >
@@ -149,7 +149,7 @@ export default function MatchIQTeaser() {
               )}
 
               {/* Footer note */}
-              <div className="px-6 py-4 bg-white/2 border-t border-white/5 text-center">
+              <div className="px-4 sm:px-6 py-4 bg-white/2 border-t border-white/5 text-center">
                 <Link href="/match-iq" className="font-poppins text-orange/70 hover:text-orange text-xs transition-colors">
                   View full leaderboard →
                 </Link>

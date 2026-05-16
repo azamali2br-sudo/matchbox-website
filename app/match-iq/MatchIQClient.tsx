@@ -55,7 +55,7 @@ export default function MatchIQClient() {
   return (
     <div className="min-h-screen bg-navy pt-28">
       {/* Hero */}
-      <div className="max-w-5xl mx-auto px-6 py-16">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         <div className="flex items-center gap-3 mb-6">
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
@@ -65,7 +65,7 @@ export default function MatchIQClient() {
 
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
           <div>
-            <h1 className="font-qaranta text-6xl md:text-7xl text-white uppercase leading-none">
+            <h1 className="font-qaranta text-5xl sm:text-6xl md:text-7xl text-white uppercase leading-none">
               Match<span className="text-orange">IQ</span>
             </h1>
             <p className="font-poppins text-white/50 text-sm mt-3 max-w-md">
@@ -140,8 +140,8 @@ function Leaderboard({ players }: { players: Player[] }) {
 
   return (
     <div className="space-y-2">
-      {/* Header row */}
-      <div className="grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 px-5 pb-2">
+      {/* Header row — hidden on mobile, shown sm+ */}
+      <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 px-5 pb-2">
         <div />
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Rating</span>
@@ -160,21 +160,44 @@ function Leaderboard({ players }: { players: Player[] }) {
           <Link
             key={player.id}
             href={`/match-iq/${player.id}`}
-            className={`grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 items-center bg-navy-card border ${borderColor} rounded-2xl px-5 py-4 hover:border-orange/30 transition-all group`}
+            className={`block bg-navy-card border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}
           >
-            <span className={`font-qaranta text-lg ${rankColor}`}>{rank}</span>
-            <div>
-              <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors">{player.name}</p>
+            {/* Mobile layout: stacked */}
+            <div className="sm:hidden flex items-center gap-3">
+              <span className={`font-qaranta text-lg w-6 shrink-0 ${rankColor}`}>{rank}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">{player.name}</p>
+                <p className="font-poppins text-white/40 text-[11px] mt-0.5">
+                  <span className="text-green-400">{player.wins}W</span>
+                  <span className="text-white/20 mx-1">·</span>
+                  <span className="text-red-400/70">{player.losses}L</span>
+                  {winRate !== null && (
+                    <>
+                      <span className="text-white/20 mx-1">·</span>
+                      <span>{winRate}% win</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <p className="font-qaranta text-2xl text-orange shrink-0">{Math.round(player.rating)}</p>
             </div>
-            <p className="font-qaranta text-xl text-orange text-right">{Math.round(player.rating)}</p>
-            <p className="font-poppins text-white/50 text-xs text-center">
-              <span className="text-green-400">{player.wins}</span>
-              <span className="text-white/20 mx-1">/</span>
-              <span className="text-red-400/70">{player.losses}</span>
-            </p>
-            <p className="font-poppins text-white/40 text-xs text-right">
-              {winRate !== null ? `${winRate}%` : '—'}
-            </p>
+
+            {/* Desktop layout: grid */}
+            <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 items-center">
+              <span className={`font-qaranta text-lg ${rankColor}`}>{rank}</span>
+              <div>
+                <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors">{player.name}</p>
+              </div>
+              <p className="font-qaranta text-xl text-orange text-right">{Math.round(player.rating)}</p>
+              <p className="font-poppins text-white/50 text-xs text-center">
+                <span className="text-green-400">{player.wins}</span>
+                <span className="text-white/20 mx-1">/</span>
+                <span className="text-red-400/70">{player.losses}</span>
+              </p>
+              <p className="font-poppins text-white/40 text-xs text-right">
+                {winRate !== null ? `${winRate}%` : '—'}
+              </p>
+            </div>
           </Link>
         )
       })}

@@ -43,13 +43,13 @@ const features = [
 
 export default function Features() {
   return (
-    <section className="bg-navy-dark py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="bg-navy-dark py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-16">
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">
             Why Matchbox
           </p>
-          <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+          <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
             More Than<br />a Court
           </h2>
         </div>

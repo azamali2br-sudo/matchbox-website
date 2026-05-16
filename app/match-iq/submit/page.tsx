@@ -305,7 +305,7 @@ export default function SubmitMatchPage() {
                   placeholder="0"
                   value={team1Sets}
                   onChange={e => setTeam1Sets(e.target.value)}
-                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-2xl sm:text-4xl text-center px-3 sm:px-4 py-3 sm:py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
                 />
               </div>
               <div className="text-center mt-5">
@@ -319,7 +319,7 @@ export default function SubmitMatchPage() {
                   placeholder="0"
                   value={team2Sets}
                   onChange={e => setTeam2Sets(e.target.value)}
-                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-4xl text-center px-4 py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
+                  className="w-full bg-navy border border-white/10 text-white font-qaranta text-2xl sm:text-4xl text-center px-3 sm:px-4 py-3 sm:py-4 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/15"
                 />
               </div>
             </div>

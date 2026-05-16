@@ -90,14 +90,14 @@ export default function LeaguesPage() {
             }}
           />
         </div>
-        <div className="relative max-w-7xl mx-auto px-6">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2 mb-8">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
             <span className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest">
               Inaugural Season — Coming Soon
             </span>
           </div>
-          <h1 className="font-qaranta text-6xl md:text-8xl text-white uppercase leading-none mb-6">
+          <h1 className="font-qaranta text-4xl sm:text-5xl md:text-6xl lg:text-8xl text-white uppercase leading-none mb-6">
             Leagues &<br />
             <span className="text-orange">Tournaments</span>
           </h1>
@@ -129,8 +129,8 @@ export default function LeaguesPage() {
 
       {/* Stats bar */}
       <div className="bg-navy-dark border-y border-white/6">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex flex-wrap gap-x-16 gap-y-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          <div className="flex flex-wrap gap-x-8 sm:gap-x-16 gap-y-4 sm:gap-y-6">
             {[
               { value: '16', label: 'Teams' },
               { value: '2', label: 'Divisions' },
@@ -150,10 +150,10 @@ export default function LeaguesPage() {
 
       {/* Divisions */}
       <section className="py-24 md:py-32">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="mb-14">
             <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">Structure</p>
-            <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
               Two Divisions.<br />One Trophy.
             </h2>
           </div>
@@ -188,10 +188,10 @@ export default function LeaguesPage() {
 
       {/* Format steps */}
       <section id="format" className="bg-navy-dark py-24 md:py-32">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="mb-14">
             <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">How It Works</p>
-            <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
               The Format
             </h2>
           </div>
@@ -216,10 +216,10 @@ export default function LeaguesPage() {
 
       {/* FAQ */}
       <section className="py-24 md:py-32">
-        <div className="max-w-4xl mx-auto px-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-14">
             <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">FAQ</p>
-            <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
               Common<br />Questions
             </h2>
           </div>
@@ -237,7 +237,7 @@ export default function LeaguesPage() {
       {/* CTA */}
       <section className="bg-navy-dark py-24">
         <div className="max-w-2xl mx-auto px-6 text-center">
-          <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight mb-6">
+          <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight mb-6">
             Ready to<br />
             <span className="text-orange">Compete?</span>
           </h2>

@@ -23,7 +23,7 @@ export default function Hero() {
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-navy to-transparent" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-6 w-full pt-28 pb-24 grid grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_500px] gap-12 xl:gap-20 items-center">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 w-full pt-28 pb-24 grid grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_500px] gap-12 xl:gap-20 items-center">
         <div>
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2 mb-10">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
@@ -33,20 +33,20 @@ export default function Hero() {
           </div>
 
           <h1
-            className="font-qaranta uppercase leading-none text-white mb-8"
-            style={{ fontSize: "clamp(64px, 9vw, 112px)" }}
+            className="font-qaranta uppercase leading-none text-white mb-6 sm:mb-8"
+            style={{ fontSize: "clamp(44px, 11vw, 112px)" }}
           >
             Play.<br />
             Compete.<br />
             <span className="text-orange">Belong.</span>
           </h1>
 
-          <p className="font-poppins text-white/65 text-lg md:text-xl leading-relaxed mb-12 max-w-xl">
+          <p className="font-poppins text-white/65 text-base sm:text-lg md:text-xl leading-relaxed mb-8 sm:mb-12 max-w-xl">
             Two premium courts. A 1,000+ strong community. An elite player rating system.
             Matchbox is Malir Cantt&apos;s home of padel.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 mb-20">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-12 sm:mb-20">
             <Link
               href="/booking"
               className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all duration-200 hover:shadow-xl hover:shadow-orange/30 hover:-translate-y-0.5"
@@ -69,7 +69,7 @@ export default function Hero() {
             </a>
           </div>
 
-          <div className="flex flex-wrap gap-x-12 gap-y-6 pt-10 border-t border-white/10">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 sm:gap-x-12 gap-y-5 sm:gap-y-6 pt-8 sm:pt-10 border-t border-white/10">
             {[
               { value: "2", label: "Premium Courts" },
               { value: "1,000+", label: "Community Members" },
@@ -77,7 +77,7 @@ export default function Hero() {
               { value: "#1", label: "In Malir Cantt" },
             ].map((stat) => (
               <div key={stat.label}>
-                <div className="font-qaranta text-3xl text-orange">{stat.value}</div>
+                <div className="font-qaranta text-2xl sm:text-3xl text-orange">{stat.value}</div>
                 <div className="font-poppins text-white/50 text-xs mt-1 uppercase tracking-wide">{stat.label}</div>
               </div>
             ))}

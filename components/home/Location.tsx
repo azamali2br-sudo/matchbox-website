@@ -1,19 +1,19 @@
 export default function Location() {
   return (
-    <section className="bg-navy py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="bg-navy py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">
             Find Us
           </p>
-          <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+          <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
             Come Play
           </h2>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Map embed */}
-          <div className="lg:col-span-2 rounded-3xl overflow-hidden border border-white/8 min-h-[380px] bg-navy-card relative">
+          <div className="lg:col-span-2 rounded-3xl overflow-hidden border border-white/8 min-h-[260px] md:min-h-[380px] bg-navy-card relative">
             <iframe
               src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3619.9!2d67.19!3d24.93!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjTCsDU1JzQ4LjAiTiA2N8KwMTEnMjQuMCJF!5e0!3m2!1sen!2spk!4v1620000000000!5m2!1sen!2spk"
               width="100%"

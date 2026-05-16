@@ -26,14 +26,14 @@ const courts = [
 
 export default function Courts() {
   return (
-    <section className="bg-navy py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="bg-navy py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-14">
           <div>
             <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">
               Our Courts
             </p>
-            <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight">
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
               Pick Your<br />Arena
             </h2>
           </div>

@@ -1,8 +1,8 @@
 export default function LeaguesTeaser() {
   return (
-    <section className="bg-navy-dark py-24 md:py-32">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="relative rounded-3xl bg-navy border border-white/8 overflow-hidden px-8 md:px-16 py-16 md:py-20">
+    <section className="bg-navy-dark py-16 md:py-32">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="relative rounded-3xl bg-navy border border-white/8 overflow-hidden px-5 sm:px-8 md:px-16 py-12 sm:py-16 md:py-20">
           {/* Background decoration */}
           <div className="absolute -right-16 -top-16 w-64 h-64 bg-orange/8 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -left-8 -bottom-8 w-48 h-48 bg-orange/5 rounded-full blur-2xl pointer-events-none" />

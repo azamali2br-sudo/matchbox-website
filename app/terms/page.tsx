@@ -17,7 +17,7 @@ export default function TermsPage() {
           <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-3">
             Legal
           </p>
-          <h1 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight mb-4">
+          <h1 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight mb-4">
             Terms &<br />
             <span className="text-orange">Privacy</span>
           </h1>
