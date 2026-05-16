@@ -15,7 +15,10 @@ export default function AdminClient() {
   const [authLoading, setAuthLoading] = useState(false)
 
   useEffect(() => {
-    if (sessionStorage.getItem('mbx_admin') === '1') setAuthed(true)
+    fetch('/api/admin/session')
+      .then(r => r.json())
+      .then(d => { if (d.authed) setAuthed(true) })
+      .catch(() => {})
   }, [])
 
   async function handleLogin(e: React.FormEvent) {
@@ -27,9 +30,9 @@ export default function AdminClient() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
+        credentials: 'same-origin',
       })
       if (res.ok) {
-        sessionStorage.setItem('mbx_admin', '1')
         setAuthed(true)
       } else {
         setAuthError('Incorrect password')

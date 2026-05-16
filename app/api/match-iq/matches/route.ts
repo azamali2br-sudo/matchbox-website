@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { requireAdmin } from '@/lib/admin-auth'
+import { rateLimit } from '@/lib/rate-limit'
+
+const PHONE_RE = /^[+\d][\d\s()-]{6,19}$/
 
 const MATCH_SELECT = `
   id, played_on, court, start_time, team1_score, team2_score, set_scores, status, submitted_by, created_at,
@@ -13,6 +17,11 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') ?? 'approved'
   const limit = parseInt(searchParams.get('limit') ?? '20')
+
+  if (status !== 'approved') {
+    const guard = await requireAdmin(request)
+    if (guard) return guard
+  }
 
   const [{ data, error }, { count }] = await Promise.all([
     supabaseAdmin
@@ -50,6 +59,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, 'match-submit', 10, 60 * 60 * 1000)
+  if (limited) return limited
+
   const body = await request.json()
   const { playedOn, court, startTime, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
 
@@ -58,6 +70,25 @@ export async function POST(request: NextRequest) {
   }
   if (team1Score == null || team2Score == null) {
     return NextResponse.json({ error: 'Scores required' }, { status: 400 })
+  }
+  const s1 = Number(team1Score), s2 = Number(team2Score)
+  if (!Number.isInteger(s1) || !Number.isInteger(s2) || s1 < 0 || s2 < 0 || s1 > 3 || s2 > 3) {
+    return NextResponse.json({ error: 'Invalid score' }, { status: 400 })
+  }
+  if (s1 === s2) {
+    return NextResponse.json({ error: 'Match cannot end in a tie' }, { status: 400 })
+  }
+  for (const p of [...team1, ...team2]) {
+    if (!p?.phone || !PHONE_RE.test(p.phone)) {
+      return NextResponse.json({ error: 'Invalid player phone' }, { status: 400 })
+    }
+    if (typeof p.name !== 'string' || p.name.trim().length < 2 || p.name.length > 100) {
+      return NextResponse.json({ error: 'Invalid player name' }, { status: 400 })
+    }
+  }
+  const phones = [...team1, ...team2].map(p => p.phone)
+  if (new Set(phones).size !== 4) {
+    return NextResponse.json({ error: 'A player can only appear once' }, { status: 400 })
   }
 
   const playerIds: string[] = []

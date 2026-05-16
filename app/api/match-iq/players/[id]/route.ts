@@ -6,11 +6,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
   const [playerRes, historyRes, matchesRes] = await Promise.all([
     supabase
       .from('players')
-      .select('id, name, phone, rating, wins, losses, created_at')
+      .select('id, name, rating, wins, losses, created_at')
       .eq('id', id)
       .single(),
 
