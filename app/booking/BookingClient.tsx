@@ -200,7 +200,7 @@ export default function BookingClient() {
   const maxDate = getDateStr(30)
 
   return (
-    <div className="min-h-screen bg-navy pt-20">
+    <div className="min-h-screen bg-navy pt-24">
       {demoMode && (
         <div className="bg-orange/10 border-b border-orange/20 px-6 py-2 text-center">
           <span className="font-poppins text-orange text-xs">
@@ -509,7 +509,7 @@ function SuccessScreen({ data, onBookAnother }: { data: SuccessData; onBookAnoth
     : null
 
   return (
-    <div className="min-h-screen bg-navy pt-20 flex items-start justify-center">
+    <div className="min-h-screen bg-navy pt-24 flex items-start justify-center">
       <div className="max-w-xl w-full mx-auto px-6 py-16">
         {/* Confirmed badge */}
         <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mx-auto mb-8">

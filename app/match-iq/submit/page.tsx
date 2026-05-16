@@ -158,7 +158,7 @@ export default function SubmitMatchPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-navy flex items-center justify-center pt-20 px-6">
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-24 px-6">
         <div className="max-w-md w-full text-center">
           <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mx-auto mb-6">
             <svg className="w-9 h-9 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +184,7 @@ export default function SubmitMatchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-navy pt-20">
+    <div className="min-h-screen bg-navy pt-24">
       <div className="max-w-2xl mx-auto px-6 py-12">
         <Link href="/match-iq" className="inline-flex items-center gap-2 font-poppins text-white/40 text-sm hover:text-white/70 transition-colors mb-8">
           ← Match IQ

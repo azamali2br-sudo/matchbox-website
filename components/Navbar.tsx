@@ -29,14 +29,14 @@ export default function Navbar() {
           : "bg-transparent"
       }`}
     >
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-20">
+      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-24">
         <Link href="/" className="flex items-center">
           <Image
             src="/logos/Matchbox-SecondaryLogo-02.png"
             alt="Matchbox Padel Club"
-            width={200}
-            height={52}
-            className="h-11 w-auto"
+            width={280}
+            height={72}
+            className="h-16 w-auto"
             priority
           />
         </Link>

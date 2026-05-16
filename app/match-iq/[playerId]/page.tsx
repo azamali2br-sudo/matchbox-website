@@ -38,7 +38,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-navy flex items-center justify-center pt-20">
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-24">
         <div className="space-y-4 w-full max-w-2xl px-6">
           {[1, 2, 3].map(i => <div key={i} className="h-24 bg-navy-card rounded-2xl animate-pulse" />)}
         </div>
@@ -48,7 +48,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 
   if (notFound || !player) {
     return (
-      <div className="min-h-screen bg-navy flex items-center justify-center pt-20">
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-24">
         <div className="text-center">
           <p className="font-qaranta text-4xl text-white/20 uppercase mb-4">Player Not Found</p>
           <Link href="/match-iq" className="font-poppins text-orange text-sm hover:underline">← Back to leaderboard</Link>
@@ -61,7 +61,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
   const winRate = matches_played > 0 ? Math.round((player.wins / matches_played) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-navy pt-20">
+    <div className="min-h-screen bg-navy pt-24">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <Link href="/match-iq" className="inline-flex items-center gap-2 font-poppins text-white/40 text-sm hover:text-white/70 transition-colors mb-8">
           ← Leaderboard
