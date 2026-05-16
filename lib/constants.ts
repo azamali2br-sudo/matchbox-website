@@ -89,14 +89,16 @@ export function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+// Karachi-local YYYY-MM-DD. Using toISOString gives UTC, which silently shifts
+// "today" by a day late at night in PKT (UTC+5). Use en-CA locale = ISO format.
 export function getTodayStr(): string {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' })
 }
 
 export function getDateStr(daysFromToday: number): string {
   const d = new Date()
   d.setDate(d.getDate() + daysFromToday)
-  return d.toISOString().split('T')[0]
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' })
 }
 
 export function generateBookingRef(): string {

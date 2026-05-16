@@ -318,6 +318,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                         <p className="font-poppins text-white/35 text-xs uppercase tracking-wider">Customer</p>
                         <p className="font-poppins text-white text-sm font-medium mt-0.5">{booking.name}</p>
                         <p className="font-poppins text-white/40 text-xs">{booking.phone}</p>
+                        {booking.email && (
+                          <p className="font-poppins text-white/40 text-xs truncate" title={booking.email}>{booking.email}</p>
+                        )}
                       </div>
                       <div>
                         <p className="font-poppins text-white/35 text-xs uppercase tracking-wider">Duration & Price</p>
