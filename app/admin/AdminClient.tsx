@@ -97,7 +97,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [loading, setLoading] = useState(true)
   const [filterCourt, setFilterCourt] = useState<FilterCourt>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
-  const [filterDate, setFilterDate] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [updating, setUpdating] = useState<string | null>(null)
   const [demoMode, setDemoMode] = useState(false)
 
@@ -150,11 +151,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const filtered = bookings.filter(b => {
     if (filterCourt !== 'all' && b.court !== filterCourt) return false
     if (filterStatus !== 'all' && b.status !== filterStatus) return false
-    if (filterDate && b.date !== filterDate) return false
+    if (filterDateFrom && b.date < filterDateFrom) return false
+    if (filterDateTo && b.date > filterDateTo) return false
     return true
   })
 
-  const hasFilter = filterCourt !== 'all' || filterStatus !== 'all' || !!filterDate
+  const hasFilter = filterCourt !== 'all' || filterStatus !== 'all' || !!filterDateFrom || !!filterDateTo
 
   // Stats reflect what's currently visible: when a filter is on, stats describe
   // the filtered subset. When no filter, stats are all-time + today's revenue.
@@ -180,9 +182,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const revenueLabel = (() => {
     if (!hasFilter) return "Today's Revenue"
     const parts: string[] = []
-    if (filterDate) {
-      const d = new Date(filterDate + 'T12:00:00')
-      parts.push(d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short' }))
+    const fmt = (s: string) => new Date(s + 'T12:00:00').toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })
+    if (filterDateFrom && filterDateTo) {
+      parts.push(filterDateFrom === filterDateTo ? fmt(filterDateFrom) : `${fmt(filterDateFrom)} – ${fmt(filterDateTo)}`)
+    } else if (filterDateFrom) {
+      parts.push(`From ${fmt(filterDateFrom)}`)
+    } else if (filterDateTo) {
+      parts.push(`Until ${fmt(filterDateTo)}`)
     }
     if (filterCourt !== 'all') parts.push(`Box ${filterCourt}`)
     if (filterStatus !== 'all') parts.push(filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1))
@@ -284,20 +290,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               </button>
             ))}
           </div>
-          <input
-            type="date"
-            value={filterDate}
-            min={getDateStr(-30)}
-            max={getDateStr(30)}
-            onChange={e => setFilterDate(e.target.value)}
-            className="bg-navy-card border border-white/8 text-white/60 font-poppins text-xs px-3 py-2 rounded-xl outline-none focus:border-orange/40"
-          />
-          {filterDate && (
+          <div className="flex items-center gap-2 bg-navy-card border border-white/8 rounded-xl px-3 py-1.5">
+            <input
+              type="date"
+              value={filterDateFrom}
+              max={filterDateTo || getDateStr(30)}
+              onChange={e => setFilterDateFrom(e.target.value)}
+              className="bg-transparent text-white/70 font-poppins text-xs outline-none [color-scheme:dark]"
+              aria-label="From date"
+            />
+            <span className="font-poppins text-white/30 text-xs">→</span>
+            <input
+              type="date"
+              value={filterDateTo}
+              min={filterDateFrom}
+              max={getDateStr(30)}
+              onChange={e => setFilterDateTo(e.target.value)}
+              className="bg-transparent text-white/70 font-poppins text-xs outline-none [color-scheme:dark]"
+              aria-label="To date"
+            />
+          </div>
+          {(filterDateFrom || filterDateTo) && (
             <button
-              onClick={() => setFilterDate('')}
+              onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }}
               className="font-poppins text-xs text-white/40 hover:text-white/70 px-2"
             >
-              Clear date ×
+              Clear dates ×
             </button>
           )}
           <button
