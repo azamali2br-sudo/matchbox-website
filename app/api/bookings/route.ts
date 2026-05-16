@@ -106,5 +106,23 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase.from('bookings').insert(row).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ booking: toBooking(data) })
+  const booking = toBooking(data)
+
+  // Fire-and-forget: email failures must never block a booking
+  import('@/lib/email').then(({ sendBookingConfirmation }) =>
+    sendBookingConfirmation({
+      ref: booking.ref,
+      court: booking.court,
+      date: booking.date,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      durationHours: booking.durationHours,
+      name: booking.name,
+      email: booking.email,
+      totalPrice: booking.totalPrice,
+      holdExpiresAt: booking.holdExpiresAt,
+    }).catch(err => console.error('[email] send failed:', err)),
+  )
+
+  return NextResponse.json({ booking })
 }
