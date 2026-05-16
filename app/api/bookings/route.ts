@@ -81,7 +81,9 @@ export async function GET(request: NextRequest) {
   let query = (isAdmin ? supabaseAdmin : supabase)
     .from('bookings')
     .select(selectFields)
-    .neq('status', 'cancelled')
+  // Hide cancelled from public callers so the slot frees up;
+  // admin sees the full history (needed for the Cancelled filter & revenue view).
+  if (!isAdmin) query = query.neq('status', 'cancelled')
   if (date) query = query.eq('date', date)
   if (court) query = query.eq('court', court)
 

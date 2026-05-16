@@ -154,14 +154,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return true
   })
 
-  const stats = {
-    total: bookings.length,
-    pending: bookings.filter(b => b.status === 'pending').length,
-    confirmed: bookings.filter(b => b.status === 'confirmed').length,
-    todayRevenue: bookings
-      .filter(b => b.date === getTodayStr() && b.status === 'confirmed')
-      .reduce((sum, b) => sum + b.totalPrice, 0),
-  }
+  const hasFilter = filterCourt !== 'all' || filterStatus !== 'all' || !!filterDate
+
+  // Stats reflect what's currently visible: when a filter is on, stats describe
+  // the filtered subset. When no filter, stats are all-time + today's revenue.
+  const stats = hasFilter
+    ? {
+        total: filtered.length,
+        pending: filtered.filter(b => b.status === 'pending').length,
+        confirmed: filtered.filter(b => b.status === 'confirmed').length,
+        // Include all visible bookings — if user filtered to cancelled, they
+        // want to see cancelled revenue specifically.
+        revenue: filtered.reduce((sum, b) => sum + b.totalPrice, 0),
+      }
+    : {
+        total: bookings.length,
+        pending: bookings.filter(b => b.status === 'pending').length,
+        confirmed: bookings.filter(b => b.status === 'confirmed').length,
+        revenue: bookings
+          .filter(b => b.date === getTodayStr() && b.status === 'confirmed')
+          .reduce((sum, b) => sum + b.totalPrice, 0),
+      }
+
+  // Adapt the revenue card's label to what's actually being summed.
+  const revenueLabel = (() => {
+    if (!hasFilter) return "Today's Revenue"
+    const parts: string[] = []
+    if (filterDate) {
+      const d = new Date(filterDate + 'T12:00:00')
+      parts.push(d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short' }))
+    }
+    if (filterCourt !== 'all') parts.push(`Box ${filterCourt}`)
+    if (filterStatus !== 'all') parts.push(filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1))
+    parts.push('Revenue')
+    return parts.join(' · ')
+  })()
 
   return (
     <div className="min-h-screen bg-navy">
@@ -221,10 +248,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
-            { label: 'Total Bookings', value: stats.total, color: 'text-white' },
+            { label: hasFilter ? 'Filtered Bookings' : 'Total Bookings', value: stats.total, color: 'text-white' },
             { label: 'Pending Payment', value: stats.pending, color: 'text-amber-400' },
             { label: 'Confirmed', value: stats.confirmed, color: 'text-green-400' },
-            { label: "Today's Revenue", value: formatCurrency(stats.todayRevenue), color: 'text-orange' },
+            { label: revenueLabel, value: formatCurrency(stats.revenue), color: 'text-orange' },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-navy-card rounded-2xl border border-white/8 p-5">
               <p className="font-poppins text-white/40 text-xs uppercase tracking-widest mb-2">{label}</p>
