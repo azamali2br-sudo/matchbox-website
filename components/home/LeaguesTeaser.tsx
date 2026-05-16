@@ -17,7 +17,7 @@ export default function LeaguesTeaser() {
                 </span>
               </div>
 
-              <h2 className="font-qaranta text-5xl md:text-6xl text-white uppercase leading-tight mb-6">
+              <h2 className="font-qaranta text-3xl sm:text-4xl lg:text-4xl xl:text-5xl text-white uppercase leading-tight mb-6 break-words">
                 Leagues &<br />
                 <span className="text-orange">Tournaments</span>
               </h2>

@@ -289,10 +289,10 @@ export default function BookingClient() {
             {/* Legend */}
             <div className="flex items-center gap-5 mb-5">
               {[
-                { color: 'bg-white/20', label: 'Available' },
+                { color: 'bg-white/40', label: 'Available' },
+                { color: 'bg-orange', label: 'Peak hour' },
                 { color: 'bg-amber-400/80', label: 'Pending payment' },
                 { color: 'bg-red-500/70', label: 'Taken' },
-                { color: 'bg-orange', label: 'Selected' },
               ].map(({ color, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
                   <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
@@ -333,7 +333,7 @@ export default function BookingClient() {
                         {formatTime(time)}
                       </p>
                       <p className={`font-poppins text-xs mt-1 ${
-                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : isPeak ? 'text-orange/80' : 'text-white/40'
+                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/70'
                       }`}>
                         {isUnavailable
                           ? status === 'pending' ? 'Pending' : 'Taken'
@@ -341,7 +341,7 @@ export default function BookingClient() {
                         }
                       </p>
                       {isPeak && !isUnavailable && (
-                        <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/60' : 'bg-orange/60'}`} />
+                        <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} title="Peak hour" />
                       )}
                     </button>
                   )

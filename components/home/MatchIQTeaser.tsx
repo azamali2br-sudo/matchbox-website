@@ -1,14 +1,27 @@
-import Link from "next/link";
+'use client';
 
-const mockPlayers = [
-  { rank: 1, name: "Ali Hassan", rating: 84.2, trend: "up", matches: 42 },
-  { rank: 2, name: "Usman Khan", rating: 81.7, trend: "up", matches: 38 },
-  { rank: 3, name: "Bilal Ahmed", rating: 79.4, trend: "down", matches: 51 },
-  { rank: 4, name: "Faisal Raza", rating: 76.1, trend: "up", matches: 29 },
-  { rank: 5, name: "Zain Malik", rating: 73.8, trend: "down", matches: 33 },
-];
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type Player = {
+  id: string;
+  name: string;
+  rating: number;
+  wins: number;
+  losses: number;
+};
 
 export default function MatchIQTeaser() {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/match-iq/players')
+      .then(r => r.json())
+      .then(d => setPlayers((d.players ?? []).slice(0, 5)))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <section className="bg-navy py-24 md:py-32 overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
@@ -59,7 +72,7 @@ export default function MatchIQTeaser() {
             </Link>
           </div>
 
-          {/* Right — Mock Leaderboard */}
+          {/* Right — Live Leaderboard */}
           <div className="relative">
             {/* Glow effect behind card */}
             <div className="absolute inset-0 bg-orange/5 rounded-3xl blur-3xl scale-110 pointer-events-none" />
@@ -75,7 +88,7 @@ export default function MatchIQTeaser() {
                   </div>
                   <span className="font-qaranta text-white text-lg uppercase">Leaderboard</span>
                 </div>
-                <span className="font-poppins text-white/30 text-xs">Preview</span>
+                <span className="font-poppins text-white/30 text-xs">Top 5</span>
               </div>
 
               {/* Column headers */}
@@ -87,58 +100,59 @@ export default function MatchIQTeaser() {
               </div>
 
               {/* Players */}
-              {mockPlayers.map((player, i) => (
-                <div
-                  key={player.rank}
-                  className={`grid grid-cols-12 gap-2 items-center px-6 py-4 ${
-                    i < mockPlayers.length - 1 ? "border-b border-white/5" : ""
-                  } ${i === 0 ? "bg-orange/5" : ""}`}
-                >
-                  <span
-                    className={`col-span-1 font-qaranta text-lg ${
-                      i === 0 ? "text-orange" : "text-white/30"
-                    }`}
-                  >
-                    {player.rank}
-                  </span>
-                  <div className="col-span-5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-navy-dark border border-white/10 flex items-center justify-center flex-shrink-0">
-                      <span className="font-qaranta text-xs text-white/60">
-                        {player.name.charAt(0)}
-                      </span>
-                    </div>
-                    <span className="font-poppins text-sm text-white font-medium truncate">
-                      {player.name}
-                    </span>
-                  </div>
-                  <span className="col-span-3 font-poppins text-xs text-white/40 text-center">
-                    {player.matches}
-                  </span>
-                  <div className="col-span-3 flex items-center justify-end gap-1.5">
-                    <svg
-                      className={`w-3 h-3 flex-shrink-0 ${
-                        player.trend === "up" ? "text-green-400" : "text-red-400"
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      {player.trend === "up" ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                      )}
-                    </svg>
-                    <span className="font-qaranta text-lg text-white">{player.rating}</span>
-                  </div>
+              {loading ? (
+                <div className="px-6 py-12 text-center">
+                  <span className="font-poppins text-white/30 text-sm">Loading leaderboard…</span>
                 </div>
-              ))}
+              ) : players.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <span className="font-poppins text-white/30 text-sm">No players yet — be the first.</span>
+                </div>
+              ) : (
+                players.map((player, i) => {
+                  const matches = (player.wins ?? 0) + (player.losses ?? 0);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`grid grid-cols-12 gap-2 items-center px-6 py-4 ${
+                        i < players.length - 1 ? "border-b border-white/5" : ""
+                      } ${i === 0 ? "bg-orange/5" : ""}`}
+                    >
+                      <span
+                        className={`col-span-1 font-qaranta text-lg ${
+                          i === 0 ? "text-orange" : "text-white/30"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="col-span-5 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-navy-dark border border-white/10 flex items-center justify-center flex-shrink-0">
+                          <span className="font-qaranta text-xs text-white/60">
+                            {player.name.charAt(0)}
+                          </span>
+                        </div>
+                        <span className="font-poppins text-sm text-white font-medium truncate">
+                          {player.name}
+                        </span>
+                      </div>
+                      <span className="col-span-3 font-poppins text-xs text-white/40 text-center">
+                        {matches}
+                      </span>
+                      <div className="col-span-3 flex items-center justify-end">
+                        <span className="font-qaranta text-lg text-white">
+                          {player.rating?.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
 
               {/* Footer note */}
               <div className="px-6 py-4 bg-white/2 border-t border-white/5 text-center">
-                <span className="font-poppins text-white/25 text-xs">
-                  Sample data — real ratings launch soon
-                </span>
+                <Link href="/match-iq" className="font-poppins text-orange/70 hover:text-orange text-xs transition-colors">
+                  View full leaderboard →
+                </Link>
               </div>
             </div>
           </div>
