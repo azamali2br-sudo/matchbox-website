@@ -80,9 +80,14 @@ export default function Footer() {
           <p className="font-poppins text-white/30 text-xs">
             &copy; {new Date().getFullYear()} Matchbox Padel Club. All rights reserved.
           </p>
-          <p className="font-poppins text-white/30 text-xs">
-            matchboxpadel.com
-          </p>
+          <div className="flex items-center gap-5">
+            <Link href="/terms" className="font-poppins text-white/40 hover:text-orange text-xs transition-colors">
+              Terms &amp; Privacy
+            </Link>
+            <p className="font-poppins text-white/30 text-xs">
+              matchboxpadel.com
+            </p>
+          </div>
         </div>
       </div>
     </footer>
