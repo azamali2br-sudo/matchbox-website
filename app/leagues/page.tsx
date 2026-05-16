@@ -79,7 +79,7 @@ export default function LeaguesPage() {
   return (
     <div className="min-h-screen bg-navy">
       {/* Hero */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
+      <section className="relative pt-28 pb-20 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -right-24 -top-24 w-96 h-96 bg-orange/8 rotate-45" style={{ borderRadius: '40px' }} />
           <div

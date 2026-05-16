@@ -53,7 +53,7 @@ export default function MatchIQClient() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-navy pt-32">
+    <div className="min-h-screen bg-navy pt-28">
       {/* Hero */}
       <div className="max-w-5xl mx-auto px-6 py-16">
         <div className="flex items-center gap-3 mb-6">

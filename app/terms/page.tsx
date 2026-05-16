@@ -10,7 +10,7 @@ const LAST_UPDATED = '17 May 2026'
 
 export default function TermsPage() {
   return (
-    <main className="bg-navy min-h-screen pt-32 pb-24">
+    <main className="bg-navy min-h-screen pt-28 pb-24">
       <div className="max-w-3xl mx-auto px-6">
         {/* Header */}
         <div className="mb-16">

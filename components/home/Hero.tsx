@@ -23,7 +23,7 @@ export default function Hero() {
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-navy to-transparent" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-6 w-full pt-32 pb-24 grid grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_500px] gap-12 xl:gap-20 items-center">
+      <div className="relative max-w-7xl mx-auto px-6 w-full pt-28 pb-24 grid grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_500px] gap-12 xl:gap-20 items-center">
         <div>
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2 mb-10">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
