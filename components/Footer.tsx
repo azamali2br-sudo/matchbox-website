@@ -17,9 +17,9 @@ export default function Footer() {
             <Image
               src="/logos/Matchbox-SecondaryLogo-02.png"
               alt="Matchbox Padel Club"
-              width={280}
-              height={72}
-              className="h-16 w-auto mb-6"
+              width={420}
+              height={108}
+              className="h-24 w-auto mb-6"
             />
             <p className="font-poppins text-white/50 text-sm leading-relaxed max-w-xs">
               Pakistan&apos;s first tech-driven padel club. Play, compete, and belong in Malir Cantt, Karachi.
