@@ -17,7 +17,6 @@ import {
   addHoursToTime,
   WHATSAPP_LINK,
   BANK_DETAILS,
-  generateBookingRef,
 } from '@/lib/constants'
 import type { Booking } from '@/lib/mock-data'
 
@@ -45,6 +44,7 @@ interface SuccessData {
   name: string
   totalPrice: number
   holdExpiresAt: string
+  cancelToken?: string
 }
 
 export default function BookingClient() {
@@ -58,6 +58,7 @@ export default function BookingClient() {
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '' })
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [demoMode, setDemoMode] = useState(false)
 
@@ -138,6 +139,7 @@ export default function BookingClient() {
     if (!form.phone.trim()) e.phone = 'Phone number is required'
     if (!form.email.trim()) e.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email'
+    if (!termsAccepted) e.terms = 'Please agree to the booking terms'
     return e
   }
 
@@ -160,6 +162,7 @@ export default function BookingClient() {
           name: form.name.trim(),
           phone: form.phone.trim(),
           email: form.email.trim(),
+          termsAccepted: true,
         }),
       })
       const data = await res.json()
@@ -175,6 +178,7 @@ export default function BookingClient() {
         name: form.name.trim(),
         totalPrice: getTotalPrice(selectedSlot, duration),
         holdExpiresAt: data.booking.holdExpiresAt,
+        cancelToken: data.booking.cancelToken,
       })
       setStep('success')
     } catch {
@@ -435,27 +439,36 @@ export default function BookingClient() {
 
                   {/* Price */}
                   {price !== null && (
-                    <div className="bg-navy rounded-2xl p-4 mb-6 flex items-center justify-between">
-                      <div>
-                        <p className="font-poppins text-white/40 text-xs">Total</p>
-                        <p className="font-qaranta text-3xl text-orange mt-0.5">{formatCurrency(price)}</p>
+                    <>
+                      <div className="bg-navy rounded-2xl p-4 mb-3 flex items-center justify-between">
+                        <div>
+                          <p className="font-poppins text-white/40 text-xs">Total</p>
+                          <p className="font-qaranta text-3xl text-orange mt-0.5">{formatCurrency(price)}</p>
+                        </div>
+                        <div className="text-right">
+                          {rateType === 'mixed' ? (
+                            <>
+                              <p className="font-poppins text-white/40 text-xs">Mixed rate</p>
+                              <p className="font-poppins text-xs mt-1 text-orange/70">⚡ Peak + 🌤 Off-peak</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-poppins text-white/40 text-xs">{formatCurrency(getPricePerHour(selectedSlot))}/hr</p>
+                              <p className="font-poppins text-xs mt-1 text-orange/70">
+                                {rateType === 'peak' ? '⚡ Peak' : '🌤 Off-peak'}
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        {rateType === 'mixed' ? (
-                          <>
-                            <p className="font-poppins text-white/40 text-xs">Mixed rate</p>
-                            <p className="font-poppins text-xs mt-1 text-orange/70">⚡ Peak + 🌤 Off-peak</p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-poppins text-white/40 text-xs">{formatCurrency(getPricePerHour(selectedSlot))}/hr</p>
-                            <p className="font-poppins text-xs mt-1 text-orange/70">
-                              {rateType === 'peak' ? '⚡ Peak' : '🌤 Off-peak'}
-                            </p>
-                          </>
-                        )}
+                      {/* Credit-earned callout — the carrot for online prepay */}
+                      <div className="bg-orange/8 border border-orange/20 rounded-xl px-4 py-3 mb-6 flex items-center gap-3">
+                        <span className="text-orange text-lg">🎁</span>
+                        <p className="font-poppins text-white/80 text-xs leading-snug">
+                          <span className="text-orange font-semibold">Earn {formatCurrency(Math.round(price * 0.15))} credit</span> on your next booking when you pay in full (90-day expiry).
+                        </p>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {/* Booking form */}
@@ -484,6 +497,28 @@ export default function BookingClient() {
                       <p className="font-poppins text-red-400 text-xs">{errors.submit}</p>
                     )}
 
+                    {/* Terms checkbox — required. Brief inline summary so
+                        nobody can plausibly say "I didn't know about the cancel tiers." */}
+                    <div>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={e => { setTermsAccepted(e.target.checked); if (errors.terms) setErrors(prev => { const n = { ...prev }; delete n.terms; return n }) }}
+                          className="mt-0.5 w-4 h-4 rounded border-white/20 bg-navy accent-orange shrink-0"
+                        />
+                        <span className="font-poppins text-white/60 text-xs leading-relaxed">
+                          I agree to Matchbox&apos;s <Link href="/terms" className="text-orange hover:underline" target="_blank">Terms</Link>, including:
+                          <span className="block text-white/40 mt-1.5 leading-relaxed">
+                            · Cancel 24+ hrs before slot → <span className="text-white/70">100% credit</span><br />
+                            · Cancel 2–24 hrs → <span className="text-white/70">50% credit</span><br />
+                            · &lt; 2 hrs / no-show → <span className="text-white/70">no credit</span>
+                          </span>
+                        </span>
+                      </label>
+                      {errors.terms && <p className="font-poppins text-red-400 text-xs mt-1">{errors.terms}</p>}
+                    </div>
+
                     <button
                       type="submit"
                       disabled={submitting}
@@ -491,6 +526,11 @@ export default function BookingClient() {
                     >
                       {submitting ? 'Confirming...' : 'Confirm Booking'}
                     </button>
+
+                    {/* Subtle WhatsApp asymmetry note — not punitive, just informational. */}
+                    <p className="font-poppins text-white/30 text-[11px] text-center leading-relaxed">
+                      Booking online earns you credit on your next visit — WhatsApp bookings don&apos;t.
+                    </p>
 
                     <div className="bg-amber-400/8 border border-amber-400/20 rounded-xl px-4 py-3 text-center">
                       <p className="font-poppins text-amber-400/90 text-xs leading-relaxed">
@@ -598,11 +638,21 @@ function SuccessScreen({ data, onBookAnother }: { data: SuccessData; onBookAnoth
         </div>
 
         {holdUntil && (
-          <div className="bg-amber-400/8 border border-amber-400/25 rounded-2xl px-5 py-4 mb-6 flex items-center gap-3">
+          <div className="bg-amber-400/8 border border-amber-400/25 rounded-2xl px-5 py-4 mb-4 flex items-center gap-3">
             <span className="text-amber-400 text-lg shrink-0">⏱</span>
             <p className="font-poppins text-amber-400/90 text-sm leading-relaxed">
-              Slot held until <span className="font-semibold text-amber-400">{holdUntil}</span>. Send your payment screenshot before then — the slot releases automatically if we don't receive it.
+              Slot held until <span className="font-semibold text-amber-400">{holdUntil}</span>. Send your payment screenshot before then — the slot releases automatically if we don&apos;t receive it.
             </p>
+          </div>
+        )}
+
+        {data.cancelToken && (
+          <div className="bg-navy-card border border-white/8 rounded-2xl px-5 py-4 mb-6">
+            <p className="font-poppins text-white/40 text-xs mb-1">Manage your booking</p>
+            <Link href={`/booking/manage/${data.cancelToken}`} className="font-poppins text-orange font-semibold text-sm hover:underline">
+              Open booking page →
+            </Link>
+            <p className="font-poppins text-white/40 text-xs mt-1">Cancel, apply credit, or change details anytime.</p>
           </div>
         )}
 

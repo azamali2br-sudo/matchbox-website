@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateDemoBooking, deleteDemoBooking } from '@/lib/mock-data'
+import { updateDemoBooking, deleteDemoBooking, type Attendance } from '@/lib/mock-data'
 import { requireAdmin } from '@/lib/admin-auth'
+import { applyCancellationCredits, hoursUntilSlot } from '@/lib/credits'
 
 const DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const ALLOWED_PATCH_FIELDS = ['status'] as const
+
+const ALLOWED_ATTENDANCE: Attendance[] = ['booked', 'attended', 'no_show', 'cancelled']
+
+// Allowed transitions: booked → {attended, no_show, cancelled}; attended ↔ no_show.
+// 'cancelled' is terminal (re-opening a cancelled booking would need a fresh booking).
+function isValidAttendanceTransition(from: Attendance, to: Attendance): boolean {
+  if (from === to) return true
+  if (from === 'cancelled') return false
+  if (from === 'booked') return ['attended', 'no_show', 'cancelled'].includes(to)
+  // attended ↔ no_show OK; either can still be cancelled if admin needs to nuke it.
+  if (from === 'attended' || from === 'no_show') return ['attended', 'no_show', 'cancelled'].includes(to)
+  return false
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -18,28 +31,77 @@ export async function PATCH(
 
   const body = await request.json()
   const update: Record<string, unknown> = {}
-  for (const key of ALLOWED_PATCH_FIELDS) {
-    if (key in body) update[key] = body[key]
+
+  if ('attendance' in body) {
+    if (!ALLOWED_ATTENDANCE.includes(body.attendance)) {
+      return NextResponse.json({ error: 'Invalid attendance' }, { status: 400 })
+    }
+    update.attendance = body.attendance
   }
+  if ('admin_note' in body) {
+    if (body.admin_note !== null && typeof body.admin_note !== 'string') {
+      return NextResponse.json({ error: 'Invalid admin_note' }, { status: 400 })
+    }
+    update.admin_note = body.admin_note
+  }
+  if ('extras_total' in body) {
+    const v = Number(body.extras_total)
+    if (!Number.isFinite(v) || v < 0 || v > 100000) {
+      return NextResponse.json({ error: 'Invalid extras_total' }, { status: 400 })
+    }
+    update.extras_total = v
+  }
+  if ('court_total' in body) {
+    const v = Number(body.court_total)
+    if (!Number.isFinite(v) || v < 0 || v > 100000) {
+      return NextResponse.json({ error: 'Invalid court_total' }, { status: 400 })
+    }
+    update.court_total = v
+  }
+
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No allowed fields to update' }, { status: 400 })
   }
 
   if (DEMO_MODE) {
-    const updated = updateDemoBooking(id, update)
+    const updated = updateDemoBooking(id, update as never)
     if (!updated) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     return NextResponse.json({ booking: updated, demoMode: true })
   }
 
   const { supabaseAdmin } = await import('@/lib/supabase')
 
-  // Fetch old row first so we can detect the pending → confirmed transition.
+  // Fetch prior state to validate transitions + drive side effects.
   const { data: prev, error: fetchErr } = await supabaseAdmin
     .from('bookings')
-    .select('status')
+    .select('*')
     .eq('id', id)
     .single()
   if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+
+  // Validate attendance transition if changing.
+  if (update.attendance && !isValidAttendanceTransition(prev.attendance, update.attendance as Attendance)) {
+    return NextResponse.json(
+      { error: `Cannot change attendance from ${prev.attendance} to ${update.attendance}` },
+      { status: 400 },
+    )
+  }
+
+  // If admin is cancelling, stamp cancellation metadata.
+  let cancellationResult: { refundCredit: number; reversedReward: number; net: number } | null = null
+  if (update.attendance === 'cancelled' && prev.attendance !== 'cancelled') {
+    const hours = hoursUntilSlot(prev.date, prev.start_time)
+    update.cancelled_at = new Date().toISOString()
+    update.cancelled_by = 'admin'
+    update.hours_before_slot_at_cancel = hours
+    cancellationResult = await applyCancellationCredits(supabaseAdmin, {
+      bookingId: id,
+      phone: prev.phone,
+      paidAmount: prev.paid_amount,
+      creditApplied: prev.credit_applied ?? 0,
+      hoursBeforeSlot: hours,
+    })
+  }
 
   const { data, error } = await supabaseAdmin
     .from('bookings')
@@ -50,30 +112,7 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Send confirmation email on pending → confirmed.
-  // Awaited (not fire-and-forget) so Vercel doesn't freeze the function
-  // before the send completes. try/catch so a Resend error doesn't fail
-  // the admin's confirm click.
-  if (prev?.status === 'pending' && data?.status === 'confirmed') {
-    try {
-      const { sendBookingConfirmed } = await import('@/lib/email')
-      await sendBookingConfirmed({
-        ref: data.ref,
-        court: data.court,
-        date: data.date,
-        startTime: data.start_time,
-        endTime: data.end_time,
-        durationHours: data.duration_hours,
-        name: data.name,
-        email: data.email,
-        totalPrice: data.total_price,
-      })
-    } catch (err) {
-      console.error('[email] confirmed send failed:', err)
-    }
-  }
-
-  return NextResponse.json({ booking: data })
+  return NextResponse.json({ booking: data, cancellation: cancellationResult })
 }
 
 export async function DELETE(

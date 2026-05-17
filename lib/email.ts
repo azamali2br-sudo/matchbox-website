@@ -12,16 +12,25 @@ type BookingForEmail = {
   email: string
   totalPrice: number
   holdExpiresAt?: string
+  cancelToken?: string
+  creditEarned?: number
+  refundCredit?: number
+  tierLabel?: string
 }
 
 const NAVY = '#181F49'
 const ORANGE = '#F68E3B'
 const GREEN = '#10B981'
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://matchbox-website.vercel.app'
+const RED = '#EF4444'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://matchboxpadel.com'
 const MAPS_LINK = 'https://maps.app.goo.gl/fv8JrRiBJFiSrWJh7'
 
 function courtLabel(c: 'A' | 'B'): string {
   return c === 'A' ? 'Box A' : 'Box B'
+}
+
+function manageLink(token?: string): string | null {
+  return token ? `${SITE_URL}/booking/manage/${token}` : null
 }
 
 function bookingDetailsTable(b: BookingForEmail, includePrice = true): string {
@@ -54,6 +63,16 @@ function shell(headerColor: string, accentLabel: string, bodyHtml: string): stri
 </body></html>`
 }
 
+function manageBlock(b: BookingForEmail): string {
+  const link = manageLink(b.cancelToken)
+  if (!link) return ''
+  return `<div style="margin:20px 0 0;padding:14px 16px;background:#f9fafb;border-radius:8px">
+    <div style="font-size:12px;color:#6b7280;margin-bottom:4px">Manage your booking</div>
+    <a href="${link}" style="color:${ORANGE};font-size:14px;text-decoration:none;font-weight:600">Open booking page →</a>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px">Cancel, apply credit, or change details</div>
+  </div>`
+}
+
 function renderPendingHtml(b: BookingForEmail): string {
   const expiryLine = b.holdExpiresAt
     ? new Date(b.holdExpiresAt).toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit' })
@@ -61,9 +80,13 @@ function renderPendingHtml(b: BookingForEmail): string {
   const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     `Hi! Payment screenshot for booking ${b.ref} (${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)}–${formatTime(b.endTime)})`,
   )}`
+  const rewardLine = `<div style="margin:0 0 20px;padding:12px 14px;background:${ORANGE}1a;border-radius:8px;font-size:13px;color:#7a3e0e">
+    <strong>Pay in full to earn ${formatCurrency(Math.round(b.totalPrice * 0.15))} credit</strong> on your next booking (90-day expiry).
+  </div>`
   const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your slot is reserved. To confirm, please complete payment within <strong>30 minutes</strong> (by <strong>${expiryLine}</strong>) and send the screenshot on WhatsApp.</p>
     ${bookingDetailsTable(b)}
+    ${rewardLine}
     <div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Bank transfer</div>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;margin:0 0 20px">
       <tr><td style="padding:14px 16px">
@@ -78,14 +101,21 @@ function renderPendingHtml(b: BookingForEmail): string {
       <a href="${waLink}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">Send screenshot on WhatsApp</a>
     </div>
     <p style="margin:8px 0 0;font-size:12px;color:#6b7280;text-align:center">Or message us at +${WHATSAPP_NUMBER}</p>
+    ${manageBlock(b)}
     <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.5">If payment isn't received within 30 minutes, the slot will be released automatically. No charge.</p>`
   return shell(ORANGE, 'Booking pending — payment required', body)
 }
 
 function renderConfirmedHtml(b: BookingForEmail): string {
+  const creditLine = b.creditEarned && b.creditEarned > 0
+    ? `<div style="margin:0 0 20px;padding:14px 16px;background:${ORANGE}1a;border-radius:8px;font-size:14px;color:#7a3e0e">
+        <strong style="color:${ORANGE}">🎉 ${formatCurrency(b.creditEarned)} credit earned</strong> on your next booking. Valid for 90 days.
+      </div>`
+    : ''
   const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.5"><strong style="color:${GREEN}">Payment received ✓</strong> Your slot is locked in. See you on the court!</p>
     ${bookingDetailsTable(b, false)}
+    ${creditLine}
     <div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Location</div>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;margin:0 0 20px">
       <tr><td style="padding:14px 16px">
@@ -102,6 +132,7 @@ function renderConfirmedHtml(b: BookingForEmail): string {
       <li>Arrive 5–10 min before your slot</li>
       <li>Questions? WhatsApp us at +${WHATSAPP_NUMBER}</li>
     </ul>
+    ${manageBlock(b)}
     <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.5">Show this email at the gate if anyone asks. Have fun!</p>`
   return shell(GREEN, 'Booking confirmed', body)
 }
@@ -119,7 +150,24 @@ function renderExpiredHtml(b: BookingForEmail): string {
   return shell('#9ca3af', 'Booking hold expired', body)
 }
 
-async function send(b: BookingForEmail, subject: string, html: string): Promise<void> {
+function renderCancelledHtml(b: BookingForEmail): string {
+  const refund = b.refundCredit ?? 0
+  const refundBlock = refund > 0
+    ? `<div style="margin:0 0 20px;padding:14px 16px;background:${ORANGE}1a;border-radius:8px;font-size:14px;color:#7a3e0e">
+        <strong style="color:${ORANGE}">${formatCurrency(refund)} credit added</strong> to your account. Valid for 90 days. Apply it on your next booking.
+      </div>`
+    : `<div style="margin:0 0 20px;padding:14px 16px;background:#fee2e2;border-radius:8px;font-size:14px;color:#7f1d1d">
+        Cancelled within the no-credit window (${b.tierLabel ?? '<2 hours'}). No credit issued.
+      </div>`
+  const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your booking has been cancelled.</p>
+    ${bookingDetailsTable(b, false)}
+    ${refundBlock}
+    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.5">Hope to see you back soon. WhatsApp us at +${WHATSAPP_NUMBER} if anything's off.</p>`
+  return shell(RED, 'Booking cancelled', body)
+}
+
+async function send(to: string, subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     console.warn('[email] RESEND_API_KEY not set — skipping email')
@@ -129,18 +177,22 @@ async function send(b: BookingForEmail, subject: string, html: string): Promise<
   const from = process.env.EMAIL_FROM || 'Matchbox <onboarding@resend.dev>'
   const replyTo = process.env.EMAIL_REPLY_TO || 'info@matchboxpadel.com'
 
-  const { error } = await resend.emails.send({ from, to: b.email, replyTo, subject, html })
+  const { error } = await resend.emails.send({ from, to, replyTo, subject, html })
   if (error) console.error('[email] Resend error:', error)
 }
 
 export async function sendBookingConfirmation(b: BookingForEmail): Promise<void> {
-  return send(b, `Booking pending — pay within 30 min to confirm (${b.ref})`, renderPendingHtml(b))
+  return send(b.email, `Booking pending — pay within 30 min to confirm (${b.ref})`, renderPendingHtml(b))
 }
 
 export async function sendBookingConfirmed(b: BookingForEmail): Promise<void> {
-  return send(b, `Booking confirmed ✓ — ${courtLabel(b.court)}, ${formatDate(b.date)} (${b.ref})`, renderConfirmedHtml(b))
+  return send(b.email, `Booking confirmed ✓ — ${courtLabel(b.court)}, ${formatDate(b.date)} (${b.ref})`, renderConfirmedHtml(b))
 }
 
 export async function sendBookingExpired(b: BookingForEmail): Promise<void> {
-  return send(b, `Booking hold expired — slot released (${b.ref})`, renderExpiredHtml(b))
+  return send(b.email, `Booking hold expired — slot released (${b.ref})`, renderExpiredHtml(b))
+}
+
+export async function sendBookingCancelled(b: BookingForEmail): Promise<void> {
+  return send(b.email, `Booking cancelled — ${courtLabel(b.court)}, ${formatDate(b.date)} (${b.ref})`, renderCancelledHtml(b))
 }

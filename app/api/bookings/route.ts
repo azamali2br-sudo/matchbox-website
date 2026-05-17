@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDemoBookings, addDemoBooking, expireHolds, type Booking } from '@/lib/mock-data'
+import { randomBytes } from 'crypto'
+import { getDemoBookings, addDemoBooking, expireHolds, deriveStatus, type Booking } from '@/lib/mock-data'
 import { generateBookingRef, getTotalPrice, addHoursToTime, HOLD_DURATION_MINUTES } from '@/lib/constants'
 import { verifySessionToken, ADMIN_COOKIE } from '@/lib/admin-auth'
 import { rateLimit } from '@/lib/rate-limit'
@@ -13,9 +14,14 @@ const ALLOWED_DURATIONS = new Set([1, 1.5, 2, 2.5, 3])
 
 const DEMO_MODE = !process.env.NEXT_PUBLIC_SUPABASE_URL
 
+// Map a Supabase row to the rich Booking shape used by the app.
 function toBooking(row: Record<string, unknown>): Booking {
+  const attendance = (row.attendance as Booking['attendance']) ?? 'booked'
+  const paidAmount = (row.paid_amount as number) ?? 0
+  const grandTotal = (row.grand_total as number) ?? (row.court_total as number) ?? 0
   return {
     id: row.id as string,
+    ref: row.ref as string,
     court: row.court as 'A' | 'B',
     date: row.date as string,
     startTime: row.start_time as string,
@@ -24,14 +30,27 @@ function toBooking(row: Record<string, unknown>): Booking {
     name: row.name as string,
     phone: row.phone as string,
     email: row.email as string,
-    status: row.status as 'pending' | 'confirmed' | 'cancelled',
-    totalPrice: row.total_price as number,
-    ref: row.ref as string,
+    attendance,
+    courtTotal: (row.court_total as number) ?? 0,
+    extrasTotal: (row.extras_total as number) ?? 0,
+    grandTotal,
+    creditApplied: (row.credit_applied as number) ?? 0,
+    paidAmount,
+    totalPrice: grandTotal, // legacy alias
+    status: deriveStatus({ attendance, paidAmount, creditApplied: (row.credit_applied as number) ?? 0, grandTotal }),
+    holdExpiresAt: (row.hold_expires_at as string | null) ?? undefined,
+    termsAcceptedAt: (row.terms_accepted_at as string | null) ?? undefined,
+    cancelToken: (row.cancel_token as string | null) ?? undefined,
+    cancelledAt: (row.cancelled_at as string | null) ?? undefined,
+    cancelledBy: (row.cancelled_by as 'customer' | 'admin' | null) ?? undefined,
+    hoursBeforeSlotAtCancel: (row.hours_before_slot_at_cancel as number | null) ?? undefined,
+    adminNote: (row.admin_note as string | null) ?? undefined,
+    source: (row.source as Booking['source']) ?? 'online',
     createdAt: row.created_at as string,
-    holdExpiresAt: row.hold_expires_at as string | undefined,
   }
 }
 
+// PII-stripped projection for public callers (slot availability only).
 function stripPii(b: Booking): Partial<Booking> {
   return {
     id: b.id,
@@ -41,6 +60,7 @@ function stripPii(b: Booking): Partial<Booking> {
     endTime: b.endTime,
     durationHours: b.durationHours,
     status: b.status,
+    attendance: b.attendance,
     holdExpiresAt: b.holdExpiresAt,
   }
 }
@@ -66,13 +86,14 @@ export async function GET(request: NextRequest) {
 
   const { supabase, supabaseAdmin } = await import('@/lib/supabase')
 
-  // Expire pending holds (admin key — anon doesn't have UPDATE policy).
-  // .select() returns the rows that flipped so we can fire one notification
-  // email each. Fire-and-forget so a Resend hiccup never blocks the GET.
+  // Expire pending holds — flip attendance='cancelled' on any 'booked' row
+  // whose hold lapsed without payment. .select() returns the freshly-cancelled
+  // rows so we can fire one email per release.
   const { data: expired } = await supabaseAdmin
     .from('bookings')
-    .update({ status: 'cancelled' })
-    .eq('status', 'pending')
+    .update({ attendance: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'admin' })
+    .eq('attendance', 'booked')
+    .eq('paid_amount', 0)
     .lt('hold_expires_at', new Date().toISOString())
     .select()
 
@@ -82,15 +103,9 @@ export async function GET(request: NextRequest) {
       await Promise.all(expired.map(row => {
         const b = toBooking(row as Record<string, unknown>)
         return sendBookingExpired({
-          ref: b.ref,
-          court: b.court,
-          date: b.date,
-          startTime: b.startTime,
-          endTime: b.endTime,
-          durationHours: b.durationHours,
-          name: b.name,
-          email: b.email,
-          totalPrice: b.totalPrice,
+          ref: b.ref, court: b.court, date: b.date, startTime: b.startTime,
+          endTime: b.endTime, durationHours: b.durationHours, name: b.name,
+          email: b.email, totalPrice: b.grandTotal,
         }).catch(err => console.error('[email] expired send failed:', err))
       }))
     } catch (err) {
@@ -98,17 +113,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Public callers get only slot-availability fields; admin gets full rows
+  // Admin sees everything (full row, includes cancelled for history).
+  // Public callers see only slot-availability fields, non-cancelled.
   const selectFields = isAdmin
     ? '*'
-    : 'id, court, date, start_time, end_time, duration_hours, status, hold_expires_at'
+    : 'id, court, date, start_time, end_time, duration_hours, attendance, hold_expires_at, paid_amount, court_total, extras_total, grand_total'
 
   let query = (isAdmin ? supabaseAdmin : supabase)
     .from('bookings')
     .select(selectFields)
-  // Hide cancelled from public callers so the slot frees up;
-  // admin sees the full history (needed for the Cancelled filter & revenue view).
-  if (!isAdmin) query = query.neq('status', 'cancelled')
+  if (!isAdmin) query = query.neq('attendance', 'cancelled')
   if (date) query = query.eq('date', date)
   if (court) query = query.eq('court', court)
 
@@ -116,8 +130,11 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[]
+  if (isAdmin) {
+    return NextResponse.json({ bookings: rows.map(toBooking) })
+  }
   return NextResponse.json({
-    bookings: rows.map(r => (isAdmin ? toBooking(r) : stripPii(toBooking({ ...r, name: '', phone: '', email: '', total_price: 0, ref: '', created_at: '' })))),
+    bookings: rows.map(r => stripPii(toBooking({ ...r, name: '', phone: '', email: '', ref: '', created_at: '' }))),
   })
 }
 
@@ -126,70 +143,66 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
 
   const body = await request.json()
-  const { court, date, startTime, durationHours, name, phone, email } = body
+  const { court, date, startTime, durationHours, name, phone, email, termsAccepted } = body
 
   if (!court || !date || !startTime || !durationHours || !name || !phone || !email) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
-  if (!ALLOWED_COURTS.has(court)) {
-    return NextResponse.json({ error: 'Invalid court' }, { status: 400 })
-  }
-  if (!DATE_RE.test(date)) {
-    return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
-  }
-  if (!ALLOWED_DURATIONS.has(Number(durationHours))) {
-    return NextResponse.json({ error: 'Invalid duration' }, { status: 400 })
-  }
-  if (!EMAIL_RE.test(email)) {
-    return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
-  }
-  if (!PHONE_RE.test(phone)) {
-    return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
-  }
+  if (!ALLOWED_COURTS.has(court)) return NextResponse.json({ error: 'Invalid court' }, { status: 400 })
+  if (!DATE_RE.test(date)) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
+  if (!ALLOWED_DURATIONS.has(Number(durationHours))) return NextResponse.json({ error: 'Invalid duration' }, { status: 400 })
+  if (!EMAIL_RE.test(email)) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
+  if (!PHONE_RE.test(phone)) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
   if (typeof name !== 'string' || name.trim().length < 2 || name.length > 100) {
     return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
   }
+  if (!termsAccepted) {
+    return NextResponse.json({ error: 'You must accept the terms to book' }, { status: 400 })
+  }
 
-  // Reject bookings whose slot has already started (in Karachi time).
+  // Slot must not have started yet.
   const slotStartMs = new Date(`${date}T${startTime}:00+05:00`).getTime()
   const nowMs = Date.now()
   if (slotStartMs <= nowMs) {
     return NextResponse.json({ error: 'This slot has already started' }, { status: 400 })
   }
 
-  // Reject bookings that touch the daily closure window 09:00–15:00 PKT.
-  // Includes bookings that start inside the window AND bookings that span
-  // through it (e.g. 08:00 for 2hrs ends at 10:00 → blocked).
+  // Daily closure 09:00–15:00 PKT.
   const [sh, sm] = startTime.split(':').map(Number)
   const startMin = sh * 60 + sm
   const endMin = startMin + Math.round(Number(durationHours) * 60)
-  const closeStart = 9 * 60
-  const closeEnd = 15 * 60
-  if (startMin < closeEnd && endMin > closeStart) {
+  if (startMin < 15 * 60 && endMin > 9 * 60) {
     return NextResponse.json({ error: 'Matchbox is closed 9 AM – 3 PM' }, { status: 400 })
   }
 
-  // Cap the payment hold so it never extends past the slot's start time —
-  // a booking made 10 min before kickoff gets a 10-min hold, not 30.
+  // Hold can't extend past slot start.
   const defaultHoldMs = nowMs + HOLD_DURATION_MINUTES * 60 * 1000
   const holdExpiresAt = new Date(Math.min(defaultHoldMs, slotStartMs)).toISOString()
+  const cancelToken = randomBytes(24).toString('hex')
+  const courtTotal = getTotalPrice(startTime, durationHours)
 
   if (DEMO_MODE) {
+    const ref = generateBookingRef()
     const newBooking: Booking = {
       id: Math.random().toString(36).slice(2),
-      court,
-      date,
-      startTime,
+      ref,
+      court, date, startTime,
       endTime: addHoursToTime(startTime, durationHours),
       durationHours,
-      name,
-      phone,
-      email,
+      name, phone, email,
+      attendance: 'booked',
       status: 'pending',
-      totalPrice: getTotalPrice(startTime, durationHours),
-      ref: generateBookingRef(),
-      createdAt: new Date().toISOString(),
+      courtTotal,
+      extrasTotal: 0,
+      grandTotal: courtTotal,
+      totalPrice: courtTotal,
+      creditApplied: 0,
+      paidAmount: 0,
       holdExpiresAt,
+      termsAcceptedAt: new Date().toISOString(),
+      cancelToken,
+      source: 'online',
+      createdAt: new Date().toISOString(),
     }
     addDemoBooking(newBooking)
     return NextResponse.json({ booking: newBooking, demoMode: true })
@@ -198,18 +211,21 @@ export async function POST(request: NextRequest) {
   const { supabase } = await import('@/lib/supabase')
 
   const row = {
-    court,
-    date,
+    ref: generateBookingRef(),
+    court, date,
     start_time: startTime,
     end_time: addHoursToTime(startTime, durationHours),
     duration_hours: durationHours,
-    name,
-    phone,
-    email,
-    status: 'pending',
-    total_price: getTotalPrice(startTime, durationHours),
-    ref: generateBookingRef(),
+    name, phone, email,
+    attendance: 'booked',
+    court_total: courtTotal,
+    extras_total: 0,
+    credit_applied: 0,
+    paid_amount: 0,
     hold_expires_at: holdExpiresAt,
+    terms_accepted_at: new Date().toISOString(),
+    cancel_token: cancelToken,
+    source: 'online',
   }
 
   const { data, error } = await supabase.from('bookings').insert(row).select().single()
@@ -217,22 +233,15 @@ export async function POST(request: NextRequest) {
 
   const booking = toBooking(data)
 
-  // Await the email send before returning so Vercel doesn't freeze the
-  // serverless function mid-promise. Wrapped in try/catch so a Resend
-  // hiccup still returns the booking successfully.
+  // Awaited send — fire-and-forget gets killed by Vercel's serverless freeze.
   try {
     const { sendBookingConfirmation } = await import('@/lib/email')
     await sendBookingConfirmation({
-      ref: booking.ref,
-      court: booking.court,
-      date: booking.date,
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-      durationHours: booking.durationHours,
-      name: booking.name,
-      email: booking.email,
-      totalPrice: booking.totalPrice,
-      holdExpiresAt: booking.holdExpiresAt,
+      ref: booking.ref, court: booking.court, date: booking.date,
+      startTime: booking.startTime, endTime: booking.endTime,
+      durationHours: booking.durationHours, name: booking.name,
+      email: booking.email, totalPrice: booking.grandTotal,
+      holdExpiresAt: booking.holdExpiresAt, cancelToken: booking.cancelToken,
     })
   } catch (err) {
     console.error('[email] send failed:', err)
