@@ -19,10 +19,25 @@ async function fetchBooking(token: string) {
   return data
 }
 
-function projectForCustomer(b: Record<string, unknown>) {
+// Prior prepay-reward credits awarded on this booking. These get reversed
+// (subtracted) from the customer's balance on cancel, so we surface them.
+async function priorRewardOnBooking(bookingId: string): Promise<number> {
+  const { supabaseAdmin } = await import('@/lib/supabase')
+  const { data } = await supabaseAdmin
+    .from('credits')
+    .select('amount')
+    .eq('booking_id', bookingId)
+    .eq('source', 'prepay_reward')
+  return (data ?? []).reduce((s, r) => s + (r.amount as number), 0)
+}
+
+function projectForCustomer(b: Record<string, unknown>, priorReward: number) {
   const hours = hoursUntilSlot(b.date as string, b.start_time as string)
   const tier = cancellationTierPercent(hours)
   const paid = (b.paid_amount as number) ?? 0
+  const creditApplied = (b.credit_applied as number) ?? 0
+  const valueIn = paid + creditApplied
+  const refundCredit = Math.round(valueIn * tier)
   return {
     ref: b.ref,
     court: b.court,
@@ -34,10 +49,15 @@ function projectForCustomer(b: Record<string, unknown>) {
     attendance: b.attendance,
     grandTotal: b.grand_total,
     paidAmount: paid,
+    creditApplied,
     hoursUntilSlot: hours,
     tierLabel: tierLabel(hours),
     tierPercent: tier,
-    estimatedCredit: Math.round(paid * tier),
+    // Refund basis is paid + credit_applied (full value put into the booking).
+    estimatedCredit: refundCredit,
+    priorReward,
+    // What the customer's credit balance changes by on cancel.
+    netCreditChange: refundCredit - priorReward,
     isPast: hours <= 0,
     alreadyCancelled: b.attendance === 'cancelled',
   }
@@ -53,7 +73,8 @@ export async function GET(
   try {
     const booking = await fetchBooking(token)
     if (!booking) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
-    return NextResponse.json({ booking: projectForCustomer(booking as Record<string, unknown>) })
+    const reward = await priorRewardOnBooking(booking.id)
+    return NextResponse.json({ booking: projectForCustomer(booking as Record<string, unknown>, reward) })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
   }
