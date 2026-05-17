@@ -77,10 +77,11 @@ export async function GET(request: NextRequest) {
     .select()
 
   if (expired && expired.length > 0) {
-    import('@/lib/email').then(({ sendBookingExpired }) => {
-      for (const row of expired) {
+    try {
+      const { sendBookingExpired } = await import('@/lib/email')
+      await Promise.all(expired.map(row => {
         const b = toBooking(row as Record<string, unknown>)
-        sendBookingExpired({
+        return sendBookingExpired({
           ref: b.ref,
           court: b.court,
           date: b.date,
@@ -91,8 +92,10 @@ export async function GET(request: NextRequest) {
           email: b.email,
           totalPrice: b.totalPrice,
         }).catch(err => console.error('[email] expired send failed:', err))
-      }
-    })
+      }))
+    } catch (err) {
+      console.error('[email] expired batch failed:', err)
+    }
   }
 
   // Public callers get only slot-availability fields; admin gets full rows
@@ -192,9 +195,12 @@ export async function POST(request: NextRequest) {
 
   const booking = toBooking(data)
 
-  // Fire-and-forget: email failures must never block a booking
-  import('@/lib/email').then(({ sendBookingConfirmation }) =>
-    sendBookingConfirmation({
+  // Await the email send before returning so Vercel doesn't freeze the
+  // serverless function mid-promise. Wrapped in try/catch so a Resend
+  // hiccup still returns the booking successfully.
+  try {
+    const { sendBookingConfirmation } = await import('@/lib/email')
+    await sendBookingConfirmation({
       ref: booking.ref,
       court: booking.court,
       date: booking.date,
@@ -205,8 +211,10 @@ export async function POST(request: NextRequest) {
       email: booking.email,
       totalPrice: booking.totalPrice,
       holdExpiresAt: booking.holdExpiresAt,
-    }).catch(err => console.error('[email] send failed:', err)),
-  )
+    })
+  } catch (err) {
+    console.error('[email] send failed:', err)
+  }
 
   return NextResponse.json({ booking })
 }

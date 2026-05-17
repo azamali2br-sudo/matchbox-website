@@ -50,10 +50,14 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fire confirmation email on pending → confirmed (fire-and-forget)
+  // Send confirmation email on pending → confirmed.
+  // Awaited (not fire-and-forget) so Vercel doesn't freeze the function
+  // before the send completes. try/catch so a Resend error doesn't fail
+  // the admin's confirm click.
   if (prev?.status === 'pending' && data?.status === 'confirmed') {
-    import('@/lib/email').then(({ sendBookingConfirmed }) =>
-      sendBookingConfirmed({
+    try {
+      const { sendBookingConfirmed } = await import('@/lib/email')
+      await sendBookingConfirmed({
         ref: data.ref,
         court: data.court,
         date: data.date,
@@ -63,8 +67,10 @@ export async function PATCH(
         name: data.name,
         email: data.email,
         totalPrice: data.total_price,
-      }).catch(err => console.error('[email] confirmed send failed:', err)),
-    )
+      })
+    } catch (err) {
+      console.error('[email] confirmed send failed:', err)
+    }
   }
 
   return NextResponse.json({ booking: data })
