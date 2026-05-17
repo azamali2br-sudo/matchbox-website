@@ -307,10 +307,13 @@ export default function BookingClient() {
             </div>
 
             {/* Legend — the only signal worth explaining */}
-            <div className="flex items-center gap-1.5 mb-5">
+            <div className="flex items-center gap-1.5 mb-2">
               <div className="w-2.5 h-2.5 rounded-full bg-orange" />
               <span className="font-poppins text-white/40 text-xs">Peak hour</span>
             </div>
+            <p className="font-poppins text-white/30 text-[11px] mb-5">
+              Have your players ready before booking — late cancels don&apos;t earn credit.
+            </p>
 
             {/* Slot grid — closed hours (9-3 PKT) are hidden entirely.
                 Unavailable slots use one unified disabled look; only available
