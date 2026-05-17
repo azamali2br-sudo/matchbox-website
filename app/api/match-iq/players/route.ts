@@ -133,10 +133,18 @@ export async function GET(request: NextRequest) {
     lifetimeMatchesById[p.id] = (p.wins ?? 0) + (p.losses ?? 0)
   }
 
+  // Tie-break must match the final API sort below or display rank and
+  // computed rankChange disagree for tied players.
+  function tieBreak(idA: string, a: Stats, idB: string, b: Stats): number {
+    if (b.rating !== a.rating) return b.rating - a.rating
+    if (b.wins !== a.wins) return b.wins - a.wins
+    return idA.localeCompare(idB)
+  }
+
   function rankMap(state: Record<string, Stats>): Record<string, number> {
     const ranked = Object.entries(state)
       .filter(([id]) => (lifetimeMatchesById[id] ?? 0) >= 3) // PROVISIONAL_MATCHES
-      .sort(([, a], [, b]) => b.rating - a.rating)
+      .sort(([idA, a], [idB, b]) => tieBreak(idA, a, idB, b))
     const ranks: Record<string, number> = {}
     ranked.forEach(([id], i) => { ranks[id] = i + 1 })
     return ranks
@@ -167,7 +175,8 @@ export async function GET(request: NextRequest) {
         rankChange,
       }
     })
-    .sort((a, b) => b.rating - a.rating)
+    // Same tie-break as rankMap above so display rank matches computed rank
+    .sort((a, b) => tieBreak(a.id, currentState[a.id], b.id, currentState[b.id]))
 
   return NextResponse.json({ players, window })
 }
