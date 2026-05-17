@@ -489,7 +489,26 @@ export default function BookingClient() {
 
                     <div className="bg-amber-400/8 border border-amber-400/20 rounded-xl px-4 py-3 text-center">
                       <p className="font-poppins text-amber-400/90 text-xs leading-relaxed">
-                        ⏱ Your slot is held for <span className="font-semibold">30 minutes</span> after booking. Send payment within that window to keep it.
+                        {(() => {
+                          const slotStartMs = new Date(`${date}T${selectedSlot}:00+05:00`).getTime()
+                          const minutesUntilStart = Math.floor((slotStartMs - Date.now()) / 60000)
+                          const holdMinutes = Math.min(30, minutesUntilStart)
+                          if (holdMinutes <= 0) {
+                            return '⚠ This slot has already started — pick a later time.'
+                          }
+                          if (holdMinutes < 30) {
+                            return (
+                              <>
+                                ⏱ Your slot starts in {holdMinutes} min — hold expires when the slot begins. Send payment quickly.
+                              </>
+                            )
+                          }
+                          return (
+                            <>
+                              ⏱ Your slot is held for <span className="font-semibold">30 minutes</span> after booking. Send payment within that window to keep it.
+                            </>
+                          )
+                        })()}
                       </p>
                     </div>
                   </form>

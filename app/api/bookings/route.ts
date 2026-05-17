@@ -150,7 +150,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
   }
 
-  const holdExpiresAt = new Date(Date.now() + HOLD_DURATION_MINUTES * 60 * 1000).toISOString()
+  // Reject bookings whose slot has already started (in Karachi time).
+  // Cap the payment hold so it never extends past the slot's start time —
+  // a booking made 10 min before kickoff gets a 10-min hold, not 30.
+  const slotStartMs = new Date(`${date}T${startTime}:00+05:00`).getTime()
+  const nowMs = Date.now()
+  if (slotStartMs <= nowMs) {
+    return NextResponse.json({ error: 'This slot has already started' }, { status: 400 })
+  }
+  const defaultHoldMs = nowMs + HOLD_DURATION_MINUTES * 60 * 1000
+  const holdExpiresAt = new Date(Math.min(defaultHoldMs, slotStartMs)).toISOString()
 
   if (DEMO_MODE) {
     const newBooking: Booking = {
