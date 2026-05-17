@@ -13,24 +13,18 @@ type Player = {
   lastPlayedAt: string | null;
 };
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
 export default function MatchIQTeaser() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/match-iq/players')
+    // Mirror the main leaderboard's default: rating computed from the last
+    // 30 days of matches, top 5 with 3+ matches in that window.
+    fetch('/api/match-iq/players?window=30d')
       .then(r => r.json())
       .then(d => {
         const all: Player[] = d.players ?? [];
-        const cutoff = Date.now() - THIRTY_DAYS_MS;
-        // Home teaser shows the "live" leaderboard: established players (5+ matches)
-        // active in the last 30 days.
-        const top = all
-          .filter(p => p.wins + p.losses >= PROVISIONAL_MATCHES)
-          .filter(p => p.lastPlayedAt && new Date(p.lastPlayedAt).getTime() >= cutoff)
-          .slice(0, 5);
+        const top = all.filter(p => p.wins + p.losses >= PROVISIONAL_MATCHES).slice(0, 5);
         setPlayers(top);
       })
       .finally(() => setLoading(false));

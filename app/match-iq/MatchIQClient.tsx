@@ -15,7 +15,6 @@ type Player = {
 }
 
 type LeaderboardWindow = '7d' | '30d' | 'all'
-const WINDOW_DAYS: Record<LeaderboardWindow, number | null> = { '7d': 7, '30d': 30, all: null }
 
 type MatchPlayer = { id: string; name: string; rating: number }
 type SetScore = { t1: number; t2: number }
@@ -42,20 +41,25 @@ export default function MatchIQClient() {
   const [totalMatches, setTotalMatches] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  // Refetch leaderboard whenever the window changes — ratings are recomputed
+  // server-side from scratch using only matches inside the window.
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-      const [pr, mr] = await Promise.all([
-        fetch('/api/match-iq/players').then(r => r.json()),
-        fetch('/api/match-iq/matches?limit=15').then(r => r.json()),
-      ])
-      setPlayers(pr.players ?? [])
-      setMatches(mr.matches ?? [])
-      setMatchRatings(mr.matchRatings ?? {})
-      setTotalMatches(mr.total ?? 0)
-      setLoading(false)
-    }
-    load()
+    setLoading(true)
+    fetch(`/api/match-iq/players?window=${window}`)
+      .then(r => r.json())
+      .then(d => setPlayers(d.players ?? []))
+      .finally(() => setLoading(false))
+  }, [window])
+
+  // Matches tab data — fetched once
+  useEffect(() => {
+    fetch('/api/match-iq/matches?limit=15')
+      .then(r => r.json())
+      .then(d => {
+        setMatches(d.matches ?? [])
+        setMatchRatings(d.matchRatings ?? {})
+        setTotalMatches(d.total ?? 0)
+      })
   }, [])
 
   return (
@@ -152,16 +156,12 @@ function Leaderboard({
     )
   }
 
-  // Split players into established (>= PROVISIONAL_MATCHES) and new
+  // Server already returns window-scoped wins/losses/matches/rating.
+  // Split into established (>= PROVISIONAL_MATCHES in this window) vs new.
   const established = players.filter(p => (p.wins + p.losses) >= PROVISIONAL_MATCHES)
   const provisional = players.filter(p => (p.wins + p.losses) < PROVISIONAL_MATCHES && (p.wins + p.losses) > 0)
 
-  // Apply time window filter to established players
-  const days = WINDOW_DAYS[window]
-  const cutoff = days === null ? null : Date.now() - days * 24 * 60 * 60 * 1000
-  const ranked = cutoff === null
-    ? established
-    : established.filter(p => p.lastPlayedAt && new Date(p.lastPlayedAt).getTime() >= cutoff)
+  const windowLabel = window === '7d' ? 'last 7 days' : window === '30d' ? 'last 30 days' : 'all time'
 
   return (
     <div className="space-y-8">
@@ -181,35 +181,42 @@ function Leaderboard({
           ))}
         </div>
         <p className="font-poppins text-white/30 text-xs">
-          {ranked.length} {ranked.length === 1 ? 'player' : 'players'}
-          {window !== 'all' && ' active in window'}
+          {window === 'all'
+            ? `${established.length} ranked`
+            : `Rating from matches in the ${windowLabel}`}
         </p>
       </div>
 
       {/* Ranked players */}
-      {ranked.length === 0 ? (
+      {established.length === 0 ? (
         <div className="text-center py-12 bg-navy-card border border-white/8 rounded-2xl">
           <p className="font-poppins text-white/40 text-sm mb-2">
-            No established players active in the {window === '7d' ? 'last 7 days' : 'last 30 days'}.
+            No players with {PROVISIONAL_MATCHES}+ matches in the {windowLabel}.
           </p>
-          <button
-            onClick={() => setWindow('all')}
-            className="font-poppins text-orange text-sm font-semibold hover:underline"
-          >
-            See all time leaderboard →
-          </button>
+          {window !== 'all' && (
+            <button
+              onClick={() => setWindow('all')}
+              className="font-poppins text-orange text-sm font-semibold hover:underline"
+            >
+              See all time leaderboard →
+            </button>
+          )}
         </div>
       ) : (
-        <PlayerList players={ranked} />
+        <PlayerList players={established} />
       )}
 
-      {/* New players section */}
+      {/* Provisional players (fewer than PROVISIONAL_MATCHES in window) */}
       {provisional.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <h3 className="font-qaranta text-xl text-white uppercase">New Players</h3>
+            <h3 className="font-qaranta text-xl text-white uppercase">
+              {window === 'all' ? 'New Players' : 'Light Activity'}
+            </h3>
             <span className="font-poppins text-white/30 text-xs">
-              Calibrating · need {PROVISIONAL_MATCHES}+ matches to rank
+              {window === 'all'
+                ? `Calibrating · need ${PROVISIONAL_MATCHES}+ matches to rank`
+                : `Fewer than ${PROVISIONAL_MATCHES} matches in the ${windowLabel}`}
             </span>
           </div>
           <PlayerList players={provisional} provisional />
