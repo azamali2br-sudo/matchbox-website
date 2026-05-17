@@ -84,9 +84,11 @@ export async function PATCH(
       .eq('id', player.id)
   }
 
-  // Insert rating history for all 4 players
+  // Insert rating history: pre_rating is what they had walking in, rating is
+  // the post-match value (used for the rating-history graph on profiles).
   const historyRows = [p1, p2, p3, p4].map(p => ({
     player_id: p.id,
+    pre_rating: p.rating,
     rating: newRatings[p.id],
     match_id: id,
   }))

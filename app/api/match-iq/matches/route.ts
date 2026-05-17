@@ -40,18 +40,19 @@ export async function GET(request: NextRequest) {
 
   const matches = data ?? []
 
-  // For approved matches, attach ratings at time of match from rating_history
-  let matchRatings: Record<string, Record<string, number>> = {}
+  // Attach each player's pre-match rating so cards show what each side
+  // was rated walking in — not the post-match value (which leaks the result).
+  const matchRatings: Record<string, Record<string, number>> = {}
   if (status === 'approved' && matches.length > 0) {
     const matchIds = matches.map((m: { id: string }) => m.id)
     const { data: historyRows } = await supabaseAdmin
       .from('rating_history')
-      .select('match_id, player_id, rating')
+      .select('match_id, player_id, pre_rating')
       .in('match_id', matchIds)
 
     for (const row of historyRows ?? []) {
       if (!matchRatings[row.match_id]) matchRatings[row.match_id] = {}
-      matchRatings[row.match_id][row.player_id] = row.rating
+      matchRatings[row.match_id][row.player_id] = row.pre_rating
     }
   }
 
