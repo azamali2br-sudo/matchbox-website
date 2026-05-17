@@ -11,6 +11,8 @@ type Player = {
   wins: number;
   losses: number;
   lastPlayedAt: string | null;
+  lifetimeMatches: number;
+  rankChange: number | null;
 };
 
 export default function MatchIQTeaser() {
@@ -24,7 +26,7 @@ export default function MatchIQTeaser() {
       .then(r => r.json())
       .then(d => {
         const all: Player[] = d.players ?? [];
-        const top = all.filter(p => p.wins + p.losses >= PROVISIONAL_MATCHES).slice(0, 5);
+        const top = all.filter(p => p.lifetimeMatches >= PROVISIONAL_MATCHES).slice(0, 5);
         setPlayers(top);
       })
       .finally(() => setLoading(false));

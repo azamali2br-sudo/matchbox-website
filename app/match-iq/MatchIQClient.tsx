@@ -12,6 +12,8 @@ type Player = {
   wins: number
   losses: number
   lastPlayedAt: string | null
+  lifetimeMatches: number
+  rankChange: number | null
 }
 
 type LeaderboardWindow = '7d' | '30d' | 'all'
@@ -156,10 +158,11 @@ function Leaderboard({
     )
   }
 
-  // Server already returns window-scoped wins/losses/matches/rating.
-  // Split into established (>= PROVISIONAL_MATCHES in this window) vs new.
-  const established = players.filter(p => (p.wins + p.losses) >= PROVISIONAL_MATCHES)
-  const provisional = players.filter(p => (p.wins + p.losses) < PROVISIONAL_MATCHES && (p.wins + p.losses) > 0)
+  // Established vs provisional is decided by LIFETIME match count, not window.
+  // A veteran with 50 matches who only played once this week is still ranked.
+  // The "New Players" section is genuinely for first-timers (lifetime < 3).
+  const established = players.filter(p => p.lifetimeMatches >= PROVISIONAL_MATCHES)
+  const provisional = players.filter(p => p.lifetimeMatches < PROVISIONAL_MATCHES)
 
   const windowLabel = window === '7d' ? 'last 7 days' : window === '30d' ? 'last 30 days' : 'all time'
 
@@ -206,23 +209,37 @@ function Leaderboard({
         <PlayerList players={established} />
       )}
 
-      {/* Provisional players (fewer than PROVISIONAL_MATCHES in window) */}
+      {/* New players — lifetime matches < PROVISIONAL_MATCHES, always shown
+          regardless of window. Veterans never end up here. */}
       {provisional.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <h3 className="font-qaranta text-xl text-white uppercase">
-              {window === 'all' ? 'New Players' : 'Light Activity'}
-            </h3>
+            <h3 className="font-qaranta text-xl text-white uppercase">New Players</h3>
             <span className="font-poppins text-white/30 text-xs">
-              {window === 'all'
-                ? `Calibrating · need ${PROVISIONAL_MATCHES}+ matches to rank`
-                : `Fewer than ${PROVISIONAL_MATCHES} matches in the ${windowLabel}`}
+              Calibrating · need {PROVISIONAL_MATCHES}+ lifetime matches to rank
             </span>
           </div>
           <PlayerList players={provisional} provisional />
         </div>
       )}
     </div>
+  )
+}
+
+function RankArrow({ change }: { change: number | null }) {
+  if (change === null) {
+    // Wasn't ranked in the previous period — show a subtle "new" marker
+    return <span className="font-poppins text-[9px] text-orange/60 mt-0.5 leading-none">NEW</span>
+  }
+  if (change === 0) {
+    return <span className="font-poppins text-[10px] text-white/25 mt-0.5 leading-none">—</span>
+  }
+  const up = change > 0
+  return (
+    <span className={`font-poppins text-[10px] mt-0.5 leading-none flex items-center gap-0.5 ${up ? 'text-green-400' : 'text-red-400/80'}`}>
+      <span className="text-[8px]">{up ? '▲' : '▼'}</span>
+      {Math.abs(change)}
+    </span>
   )
 }
 
@@ -258,9 +275,12 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
           >
             {/* Mobile layout: stacked */}
             <div className="sm:hidden flex items-center gap-3">
-              <span className={`font-qaranta text-lg w-6 shrink-0 ${rankColor}`}>
-                {provisional ? '—' : rank}
-              </span>
+              <div className="w-10 shrink-0 flex flex-col items-center">
+                <span className={`font-qaranta text-lg leading-none ${rankColor}`}>
+                  {provisional ? '—' : rank}
+                </span>
+                {!provisional && <RankArrow change={player.rankChange} />}
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">
                   {player.name}
@@ -291,7 +311,10 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
 
             {/* Desktop layout: grid */}
             <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_4rem_5rem_4rem] gap-4 items-center">
-              <span className={`font-qaranta text-lg ${rankColor}`}>{provisional ? '—' : rank}</span>
+              <div className="flex flex-col items-center">
+                <span className={`font-qaranta text-lg leading-none ${rankColor}`}>{provisional ? '—' : rank}</span>
+                {!provisional && <RankArrow change={player.rankChange} />}
+              </div>
               <div className="flex items-center gap-2 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
                 {provisional && (
