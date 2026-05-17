@@ -1,7 +1,7 @@
 # Matchbox Website — Full Project Context
 
 *Created: 2026-05-05*
-*Last updated: 2026-05-16 (session 5)*
+*Last updated: 2026-05-17 (session 6 — email migration + Resend domain verification)*
 *Owner: Azam (azamali2br@gmail.com)*
 
 This document is the single source of truth for the Matchbox website project. Re-read at the start of any website-related session.
@@ -460,7 +460,7 @@ Rank · Player · Rating · W / L · Win%
 | 19 | Match IQ — historical ratings in cards | ✓ Done | Rating at time of match from rating_history; team avg; upset badge |
 | 20 | Match IQ — redesigned match cards | ✓ Done | Accent border, rating pills, footer row, upset badge |
 | 21 | Bug fixes (session 4) | ✓ Done | See session log for full list |
-| 22 | Email confirmations (Resend) | ✓ LIVE | Wired into /api/bookings POST; RESEND_API_KEY set in Vercel prod; deployed 2026-05-16 (dpl_7qLc2pfb6MDtWr1jGA62PpQ2bNgS). Sender still `onboarding@resend.dev` — verify matchboxpadel.com in Resend dashboard to send from `bookings@matchboxpadel.com`. |
+| 22 | Email confirmations (Resend) | ✓ LIVE | Wired into /api/bookings POST. Sends from `Matchbox <bookings@matchboxpadel.com>` with `replyTo: info@matchboxpadel.com` (replies land in real Namecheap inbox). Vercel env: `RESEND_API_KEY`, `EMAIL_FROM`, optional `EMAIL_REPLY_TO`. matchboxpadel.com fully verified on Resend (session 6). |
 | 23 | Custom domain | ⏳ Pending | Connect matchboxpadel.com in Vercel dashboard |
 | 24 | Real Matchbox photos | ⏳ Pending | Swap Unsplash stock when available |
 | 25 | Bank account IBAN | ⏳ Pending | Update in lib/constants.ts |
@@ -472,9 +472,10 @@ Rank · Player · Rating · W / L · Win%
 | 31 | Aesthetics / copy polish | ⏳ Parked | Deliberately deferred — functional first |
 | 32 | Customers table refactor | ⏳ Parked | Unify `bookings` and `players` under a single customer identity keyed by phone. Not urgent — phone is a soft key today. Revisit when reporting/retention queries become a real need. |
 | 33 | WhatsApp API confirmations | ⏳ Parked | Twilio/360dialog on a second SIM (don't migrate +923222172629 — it'd break the community group capability). Pakistan SIM registration is a hassle; revisit when number is ready. |
-| 34 | Resend custom sender domain | ⏳ Pending DNS | Domain `matchboxpadel.com` created in Resend (region: ap-northeast-1, Tokyo); records pending at Namecheap. Full DNS values in §19 below. Once added & verified, set `EMAIL_FROM=Matchbox <bookings@matchboxpadel.com>` in Vercel and redeploy. |
+| 34 | Resend custom sender domain | ✓ DONE | Verified 2026-05-17. Email from `bookings@matchboxpadel.com`. Full DNS topology in §19. |
+| 35 | Email migration Hostinger → Namecheap Private Email | ✓ DONE | Old vendor's cPanel email decommissioned. info@/azam@ now on Namecheap (5 GB each, $11.88/yr Starter plan). 6,791 historical emails migrated via imapsync (0 errors). DNS authority moved from dns-parking.com → Namecheap BasicDNS. Old vendor still needs to be told to cancel Hostinger email subscription. |
 
-**Completion estimate: ~87% of fully shipped product** (email confirmations now live; custom sender domain is the remaining polish)
+**Completion estimate: ~92% of fully shipped product** (email infrastructure fully self-managed; remaining items are bank IBAN, admin password rotation, real facility photos, Match IQ teaser → real data, custom Vercel domain)
 
 ---
 
@@ -492,8 +493,10 @@ Rank · Player · Rating · W / L · Win%
 3. Add them, wait ~10 min, SSL auto-provisions
 
 ### To go fully live (checklist):
-- [ ] Connect matchboxpadel.com domain (Vercel) — point site at custom domain
-- [ ] Verify matchboxpadel.com in Resend (see §19 — DNS records pending at Namecheap)
+- [x] ~~Verify matchboxpadel.com in Resend~~ — done 2026-05-17
+- [x] ~~Migrate email from Hostinger to Namecheap~~ — done 2026-05-17 (6,791 messages)
+- [ ] Tell old vendor to cancel Hostinger email plan (manual user task)
+- [ ] Connect matchboxpadel.com domain (Vercel) — point site at custom domain (will require removing the inert `CNAME www → parkingpage` and `URL Redirect @ → www.matchboxpadel.com` records currently at Namecheap)
 - [ ] Update bank IBAN in `lib/constants.ts`
 - [ ] Change ADMIN_PASSWORD in Vercel env vars (use `printf`, not `echo`)
 - [ ] Take real Matchbox facility photos + swap Unsplash images
@@ -547,12 +550,13 @@ View on GitHub: github.com/azamali2br-sudo/matchbox-website/tags
 | 2026-05-07 (session 3) | Vercel deployed (matchbox-website.vercel.app); Supabase connected (Mumbai region, real bookings live, demo mode gone); All Vercel env vars set via CLI; Full Match IQ system built: Elo engine (K=20), leaderboard page, player profile with rating graph, match submit form with phone lookup, admin Match IQ tab with approve/reject; Score format decided: sets won (2-0/2-1) + optional set scores via expandable panel; set_scores JSONB column added to matches table; All deployed to Vercel; v2.0 tag created on GitHub |
 | 2026-05-16 (session 5) | **Email confirmations LIVE in production + Resend custom sender domain DNS pending.** See detailed §19 below for full DNS values and resume path. Summary: (1) Discussed WhatsApp API vs email vs SMS for booking notifications — picked email for now, parked WhatsApp API (needs 2nd SIM, +923222172629 must stay on Business App for community groups); (2) Discussed bookings vs Match IQ database org — concluded phone is a good-enough soft key today, parked customers-table refactor; (3) Built email confirmation system: installed `resend` npm SDK, created `lib/email.ts` with branded HTML template (navy header, orange CTA, booking details table, bank transfer block, prefilled WhatsApp screenshot link), wired into POST `/api/bookings` as fire-and-forget so a Resend outage never blocks a booking; (4) Connected Resend via Composio (send-only key — works for sending but can't manage domains); (5) Sent successful test email to azamali2br@gmail.com via Composio; (6) User created a second full-access Resend API key for the website (`re_EUiJZG...` — send scope, stored in Vercel only); (7) Added `RESEND_API_KEY` to Vercel prod env via `printf | vercel env add` (printf to avoid trailing newline bug); (8) Deployed via `vercel --prod` from local — deployment `dpl_7qLc2pfb6MDtWr1jGA62PpQ2bNgS` live at matchbox-website.vercel.app; (9) Bookings now auto-send branded email confirmations in production; (10) Created `matchboxpadel.com` domain entry in Resend via curl with full-access key — domain ID `3dd995da-cfa4-4138-aad7-27e0766fa582`, region ap-northeast-1 (Tokyo, closest to PK); (11) Pulled 3 DNS records (DKIM TXT, SPF MX, SPF TXT) — pending Namecheap setup by user. Until DNS verifies, sender stays `Matchbox <onboarding@resend.dev>` which works but looks unprofessional. Once user adds DNS records and verification flips to "verified", set `EMAIL_FROM=Matchbox <bookings@matchboxpadel.com>` in Vercel and redeploy. **Files changed:** `package.json` (+resend), `lib/email.ts` (new), `app/api/bookings/route.ts` (+fire-and-forget email send), `website-context.md` (this update). **Not yet committed to git** — local-only deploy via Vercel CLI; commit + push to v2 branch when convenient.
 | 2026-05-07 (session 4) | **Bug fixes:** (1) Double-update in approve route removed — first corrupt pass used invalid Supabase increment syntax; (2) set_scores added to player profile API query — per-set detail now shows on profiles; (3) Rating graph color fixed — orange when trending up, red when trending down (line + fill + dots); (4) Matches Played stat fixed — now uses real DB count via count:exact instead of capped fetch limit; (5) Admin password fixed — was stored with trailing newline from echo command, re-set with printf; (6) RLS error on match submit fixed — all Match IQ API routes now use supabaseAdmin. **UX improvements:** (7) Duplicate phone validation on submit form; (8) Win% column on leaderboard replaces Matches column; (9) Recent Matches cards improved — winner full brightness, loser dimmed. **New features:** (10) Court (Box A/B) selector + Start Time dropdown added to submit form — both required; (11) court + start_time columns added to matches table in Supabase via psql; (12) Admin Match IQ tab shows court + time per pending match; (13) Historical ratings in Recent Matches — fetched from rating_history in single batch query, shows rating at time of match not current; (14) Team average ratings shown above score when gap ≥ 5; (15) Upset badge when lower-rated team wins; (16) Match cards fully redesigned — accent border on winner side, rating pills inline with names, footer row with date/court/time; (17) Integer ratings everywhere — elo.ts now stores whole numbers, all display points wrapped in Math.round(). Committed as two commits (24347ac, 53a9a75), pushed to GitHub v2. |
+| 2026-05-17 (session 6) | **Email infrastructure project complete: Hostinger fully decommissioned, Namecheap Private Email live, Resend custom sender domain verified, branded emails sending from `bookings@matchboxpadel.com` end-to-end.** Full chronology in §20 below. Highlights: (1) Bought Namecheap Private Email Starter plan ($11.88/yr, 2 mailboxes used of 3 included, 5GB each, 10 free aliases per mailbox); (2) Created `info@` and `azam@` mailboxes; (3) Migrated 6,791 historical emails from Hostinger via `imapsync` (installed via brew) — info@: 6,539 msgs/420.9 MiB, azam@: 252 msgs/15.8 MiB, zero errors, zero duplicates; (4) Switched DNS authority from `dns-parking.com` (old vendor) → Namecheap BasicDNS; (5) Set Namecheap Mail Settings to "Custom MX" so we could add MX records for both root (Namecheap) and `send.` subdomain (Resend) — Private Email mode locked MX to root-only; (6) Added 9 DNS records total: 3 MX in MAIL SETTINGS section (mx1/mx2/privateemail @, feedback-smtp.ap-northeast-1.amazonses.com send) + 4 TXT in HOST RECORDS (Namecheap SPF/DKIM + Resend SPF/DKIM) + leftover CNAME www → parkingpage and URL Redirect @ → www.matchboxpadel.com (both inert, to be removed when site points at Vercel via custom domain); (7) Verified all DNS propagated via dig @1.1.1.1; (8) Triggered Resend domain verification via curl — SPF records flipped to verified almost immediately, DKIM took ~1 hour due to AWS SES propagation; (9) Once verified, added `EMAIL_FROM=Matchbox <bookings@matchboxpadel.com>` to Vercel prod env; (10) Updated `lib/email.ts` to set `replyTo: info@matchboxpadel.com` so customer replies land in real Namecheap inbox (with `EMAIL_REPLY_TO` env override option); (11) Redeployed — first attempt failed with a stale build cache error in MatchIQClient.tsx; force-redeployed with `--force` flag; (12) Real bookings tested end-to-end — confirmation emails now delivered from `bookings@matchboxpadel.com` to any customer email. **Files changed:** `lib/email.ts` (+replyTo), `docs/CONTEXT.md` (this update). **Known limitation found and confirmed:** Resend's `onboarding@resend.dev` fallback sender ONLY delivers to the account-owner email — without domain verification, real customers would not have received emails. Domain verification was the critical unblocker. Side project documented and parked: Vercel auto-deploy via GitHub push had a timing race where new env vars don't always propagate to fresh deploys; force-redeploy (`vercel --prod --force`) is the workaround when env var changes need to take effect immediately. |
 
 ---
 
-## 19. Resend custom sender domain — resume from here
+## 19. Resend custom sender domain — ✓ COMPLETE
 
-**Status as of 2026-05-16:** Domain registered in Resend, awaiting DNS records at Namecheap.
+**Status as of 2026-05-17:** Verified end-to-end. Bookings now send branded emails from `bookings@matchboxpadel.com` with `replyTo: info@matchboxpadel.com`. Tested with multiple non-account-owner recipients (pixperpoint@gmail.com, azamali2br+e2etest@gmail.com) — delivered successfully.
 
 ### State
 - **Resend domain ID:** `3dd995da-cfa4-4138-aad7-27e0766fa582`
@@ -608,3 +612,98 @@ DNS records must be pasted into Namecheap's Advanced DNS panel by the user (Name
 - Deliverability: emails from a verified domain land in inbox; emails from `onboarding@resend.dev` get flagged or hit promo tabs more often.
 - Branding: customer sees `bookings@matchboxpadel.com` — professional, matches the brand.
 - Capacity: Resend's free tier counts both senders, but verified domain unlocks "send to anyone" reliably (the dev sender is technically intended for testing).
+
+### Final reference — what's in production
+
+- **Resend domain ID:** `3dd995da-cfa4-4138-aad7-27e0766fa582`
+- **Domain:** `matchboxpadel.com` · region `ap-northeast-1` (Tokyo) · status `verified`
+- **Sender from app:** `Matchbox <bookings@matchboxpadel.com>` (configurable via `EMAIL_FROM`)
+- **Reply-to:** `info@matchboxpadel.com` (configurable via `EMAIL_REPLY_TO`)
+- **Vercel env vars:** `RESEND_API_KEY`, `EMAIL_FROM`, optionally `EMAIL_REPLY_TO`
+- **Sending key:** scoped "Sending access" only, stored in Vercel — never in repo
+- **Management key:** full-access, regenerate via Resend dashboard whenever needed
+
+---
+
+## 20. Email infrastructure — Hostinger → Namecheap Private Email migration
+
+**Status as of 2026-05-17:** Complete. Old vendor's Hostinger cPanel email decommissioned in DNS. `info@matchboxpadel.com` and `azam@matchboxpadel.com` now hosted on Namecheap Private Email. All historical email migrated.
+
+### Why we did this
+- Old vendor was charging monthly to manage Hostinger email + the broken vendor-built website
+- Email was hosted on shared Hostinger cPanel with custom nameservers `ns1/ns2.dns-parking.com` (a Hostinger DNS parking service)
+- Two active inboxes (`info@`, `azam@`) used for Skedda notifications + SaaS account logins
+- Goal: cancel the vendor, self-manage both email and DNS via Namecheap, save ongoing fees
+
+### Namecheap Private Email plan picked
+- **Plan:** Starter (~$11.88 first year, ~$15.88/yr renewal)
+- **Mailboxes:** 3 included; 2 in use (info@, azam@); 1 spare
+- **Storage:** 5 GB per mailbox (10 GB pool)
+- **Aliases:** 10 per mailbox (`bookings@` future alias of info@ if we ever need it)
+- **Webmail:** Open-Xchange at https://privateemail.com
+- **IMAP/SMTP:** `mail.privateemail.com:993 SSL` for both
+
+### Migration: how 6,791 emails moved
+- Used `imapsync` (free, GPL) installed via Homebrew (`brew install imapsync`)
+- IMAP-to-IMAP transfer from Hostinger → Namecheap, run in parallel for both mailboxes
+- Source: `imap.hostinger.com:993 SSL` · Destination: `mail.privateemail.com:993 SSL`
+- Rate-limited by Hostinger to ~1.2 msg/s — info@ took ~75 min, azam@ ~5 min
+- Result: 6,539 info@ messages (420.9 MiB) + 252 azam@ messages (15.8 MiB) — **zero errors, zero duplicates**
+- Imapsync is idempotent: re-runs skip already-copied messages, safe for migration restarts
+
+### The DNS cutover (the moment ownership transferred)
+Namecheap domain `matchboxpadel.com` had `Custom DNS` nameservers pointing at the old vendor's `dns-parking.com`. We switched to `Namecheap BasicDNS` (in Domain tab → Nameservers dropdown), which:
+- Moved DNS authority from old vendor → Namecheap
+- Killed the old Hostinger MX records instantly (in-flight Skedda notifications would have retried; nothing critical was active at that moment)
+- Cleared the way for our new email + Resend records
+
+### DNS records as configured at Namecheap (final state)
+
+**MAIL SETTINGS section** (Mail Settings = "Custom MX" — required to allow `send.` subdomain MX for Resend; Private Email mode only allows root MX):
+
+| Type | Host | Mail Server | Priority |
+|------|------|-------------|----------|
+| MX | `@` | `mx1.privateemail.com` | 10 |
+| MX | `@` | `mx2.privateemail.com` | 10 |
+| MX | `send` | `feedback-smtp.ap-northeast-1.amazonses.com` | 10 |
+
+**HOST RECORDS section:**
+
+| Type | Host | Value |
+|------|------|-------|
+| TXT | `@` | `v=spf1 include:spf.privateemail.com ~all` (Namecheap SPF) |
+| TXT | `default._domainkey` | Namecheap DKIM key (long, starts `v=DKIM1;k=rsa;p=MIIBIj...`) |
+| TXT | `resend._domainkey` | Resend DKIM key (starts `p=MIGfMA0...`) |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` (Resend SPF) |
+| CNAME | `www` | `parkingpage.namecheap.com.` (leftover Namecheap default — inert until we point at Vercel) |
+| URL Redirect | `@` | `http://www.matchboxpadel.com/` (leftover Namecheap default — inert) |
+
+The two leftover records (CNAME + URL Redirect) don't conflict with email and can be deleted when we point matchboxpadel.com at Vercel for the website.
+
+### Setup quirks that wasted time
+1. **MX missing from HOST RECORDS Type dropdown** — Namecheap intentionally hides MX from the records dropdown when Mail Settings is "Private Email" mode. Solution: switch Mail Settings to "Custom MX" → MX section unlocks below it for manual editing.
+2. **Private Email auto-managed records** under "Private Email" mode are invisible from the main HOST RECORDS table — they live silently under MAIL SETTINGS. Switching to Custom MX exposed them as editable rows.
+3. **DKIM verification slow** at Resend — SPF flipped to verified in seconds, DKIM took ~1 hour. AWS SES (Resend's backend) has its own DNS resolver cache. DNS was actually correct globally (verified via `dig @1.1.1.1`); Resend just took its time.
+4. **Stale Vercel build cache** — first redeploy after adding `EMAIL_FROM` failed with an unrelated build error in `MatchIQClient.tsx` due to cached pre-existing duplicate const. `vercel --prod --force` to bypass cache resolved it.
+
+### Reply-to setup
+Customer hits "Reply" on a booking confirmation → email routes to `info@matchboxpadel.com` (real Namecheap mailbox). Implemented via `replyTo` parameter in `lib/email.ts` (configurable via `EMAIL_REPLY_TO` env var). `bookings@matchboxpadel.com` itself is just a sender label — no real mailbox at that address.
+
+### Migration validation tests run
+- ✓ Send Gmail → info@matchboxpadel.com → arrived in Namecheap webmail
+- ✓ Send Gmail → azam@matchboxpadel.com → arrived
+- ✓ Send from info@ → external (Gmail) → arrived in inbox
+- ✓ Send from azam@ → info@ (cross-mailbox) → arrived
+- ✓ 6,539 historical emails visible in info@ inbox
+- ✓ 252 historical emails visible in azam@ inbox
+- ✓ Resend send from bookings@matchboxpadel.com → external Gmail → delivered
+- ✓ Real booking via /api/bookings → confirmation email delivered to test email
+
+### What's still on Hostinger
+Just the leftover service charge. Email DNS no longer points at Hostinger, so any incoming mail goes to Namecheap. Hostinger inboxes still hold the original copies as a backup archive — accessible via https://mail.hostinger.com login if ever needed. Once Azam tells the old vendor to cancel the Hostinger email plan, this archive disappears (acceptable since we already have the full migrated copy in Namecheap).
+
+### Files / state for future debugging
+- imapsync logs: `LOG_imapsync/2026_05_16_*.txt` (in repo root, gitignored ideally)
+- Temp password files: deleted (`/tmp/.mb_*`)
+- Vercel deployment that finally worked: `dpl_kyvjt4008-azams-projects-ac4d24d0` (force-deployed 2026-05-17)
+- Resend most-recent verified send IDs: `a4338986-7c23-46b7-a535-9b1714db6ab0` (azamali2br@gmail.com), `3235f4aa-c56f-43f2-a7a8-63a63b633a50` (pixperpoint@gmail.com)
