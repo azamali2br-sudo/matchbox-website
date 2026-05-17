@@ -302,50 +302,31 @@ export default function BookingClient() {
               </button>
             </div>
 
-            {/* Legend */}
-            <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-4 gap-y-2 sm:gap-5 mb-5">
-              {[
-                { color: 'bg-white/40', label: 'Available' },
-                { color: 'bg-orange', label: 'Peak hour' },
-                { color: 'bg-amber-400/80', label: 'Pending payment' },
-                { color: 'bg-red-500/70', label: 'Taken' },
-                { color: 'bg-white/10', label: 'Closed' },
-              ].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
-                  <span className="font-poppins text-white/40 text-xs">{label}</span>
-                </div>
-              ))}
+            {/* Legend — the only signal worth explaining */}
+            <div className="flex items-center gap-1.5 mb-5">
+              <div className="w-2.5 h-2.5 rounded-full bg-orange" />
+              <span className="font-poppins text-white/40 text-xs">Peak hour</span>
             </div>
 
-            {/* Slot grid — 48 half-hour slots */}
+            {/* Slot grid — closed hours (9-3 PKT) are hidden entirely.
+                Unavailable slots use one unified disabled look; only available
+                slots show a price, only peak slots show the dot. */}
             {loadingSlots ? (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {Array.from({ length: 48 }).map((_, i) => (
+                {Array.from({ length: 36 }).map((_, i) => (
                   <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {slots.map(({ time, status }) => {
+                {slots.filter(s => s.status !== 'closed').map(({ time, status }) => {
                   const isSelected = selectedSlot === time
                   const isPeak = isPeakHour(time)
                   const isUnavailable = status !== 'available'
 
-                  // Past slots are intentionally rendered identical to 'confirmed'
-                  // so customers can't audit which historical slots went unsold.
                   let bg = 'bg-navy-card border border-white/8 hover:border-orange/40 cursor-pointer'
                   if (isSelected) bg = 'bg-orange border border-orange shadow-lg shadow-orange/30 cursor-pointer'
-                  else if (status === 'pending') bg = 'bg-amber-400/10 border border-amber-400/30 cursor-not-allowed'
-                  else if (status === 'confirmed' || status === 'past') bg = 'bg-red-500/10 border border-red-500/20 cursor-not-allowed'
-                  else if (status === 'closed') bg = 'bg-white/[0.03] border border-white/5 cursor-not-allowed'
-
-                  // What we put on the second line of the chip
-                  let subLabel = ''
-                  if (status === 'past' || status === 'confirmed') subLabel = 'Taken'
-                  else if (status === 'pending') subLabel = 'Pending'
-                  else if (status === 'closed') subLabel = 'Closed'
-                  else subLabel = isPeak ? 'PKR 3,250' : 'PKR 1,500'
+                  else if (isUnavailable) bg = 'bg-white/[0.025] border border-white/5 cursor-not-allowed'
 
                   return (
                     <button
@@ -359,11 +340,11 @@ export default function BookingClient() {
                       }`}>
                         {formatTime(time)}
                       </p>
-                      <p className={`font-poppins text-xs mt-1 ${
-                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/70'
-                      }`}>
-                        {subLabel}
-                      </p>
+                      {!isUnavailable && (
+                        <p className={`font-poppins text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-white/70'}`}>
+                          {isPeak ? 'PKR 3,250' : 'PKR 1,500'}
+                        </p>
+                      )}
                       {isPeak && !isUnavailable && (
                         <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} />
                       )}
