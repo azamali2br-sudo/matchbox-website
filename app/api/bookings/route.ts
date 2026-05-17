@@ -151,13 +151,26 @@ export async function POST(request: NextRequest) {
   }
 
   // Reject bookings whose slot has already started (in Karachi time).
-  // Cap the payment hold so it never extends past the slot's start time —
-  // a booking made 10 min before kickoff gets a 10-min hold, not 30.
   const slotStartMs = new Date(`${date}T${startTime}:00+05:00`).getTime()
   const nowMs = Date.now()
   if (slotStartMs <= nowMs) {
     return NextResponse.json({ error: 'This slot has already started' }, { status: 400 })
   }
+
+  // Reject bookings that touch the daily closure window 09:00–15:00 PKT.
+  // Includes bookings that start inside the window AND bookings that span
+  // through it (e.g. 08:00 for 2hrs ends at 10:00 → blocked).
+  const [sh, sm] = startTime.split(':').map(Number)
+  const startMin = sh * 60 + sm
+  const endMin = startMin + Math.round(Number(durationHours) * 60)
+  const closeStart = 9 * 60
+  const closeEnd = 15 * 60
+  if (startMin < closeEnd && endMin > closeStart) {
+    return NextResponse.json({ error: 'Matchbox is closed 9 AM – 3 PM' }, { status: 400 })
+  }
+
+  // Cap the payment hold so it never extends past the slot's start time —
+  // a booking made 10 min before kickoff gets a 10-min hold, not 30.
   const defaultHoldMs = nowMs + HOLD_DURATION_MINUTES * 60 * 1000
   const holdExpiresAt = new Date(Math.min(defaultHoldMs, slotStartMs)).toISOString()
 

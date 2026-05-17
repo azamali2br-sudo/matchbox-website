@@ -21,7 +21,13 @@ import {
 } from '@/lib/constants'
 import type { Booking } from '@/lib/mock-data'
 
-type SlotStatus = 'available' | 'pending' | 'confirmed'
+type SlotStatus = 'available' | 'pending' | 'confirmed' | 'past' | 'closed'
+
+// Matchbox closure window — slots starting in [09:00, 15:00) are unavailable.
+function isClosedHour(time: string): boolean {
+  const h = parseInt(time.split(':')[0])
+  return h >= 9 && h < 15
+}
 type Step = 'calendar' | 'form' | 'success'
 
 interface SlotInfo {
@@ -64,7 +70,17 @@ export default function BookingClient() {
       if (data.demoMode) setDemoMode(true)
 
       const bookings: Booking[] = data.bookings || []
+      const nowMs = Date.now()
       const computed: SlotInfo[] = TIME_SLOTS.map(time => {
+        // Past slots get masked as "taken" so customers can't see which
+        // historical slots went unsold.
+        const slotStartMs = new Date(`${date}T${time}:00+05:00`).getTime()
+        if (slotStartMs <= nowMs) {
+          return { time, status: 'past' as SlotStatus }
+        }
+        if (isClosedHour(time)) {
+          return { time, status: 'closed' as SlotStatus }
+        }
         const overlap = bookings.find(b =>
           doesBookingOverlapSlot(b.startTime, b.endTime, time)
         )
@@ -293,6 +309,7 @@ export default function BookingClient() {
                 { color: 'bg-orange', label: 'Peak hour' },
                 { color: 'bg-amber-400/80', label: 'Pending payment' },
                 { color: 'bg-red-500/70', label: 'Taken' },
+                { color: 'bg-white/10', label: 'Closed' },
               ].map(({ color, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
                   <div className={`w-2.5 h-2.5 rounded-full ${color}`} />
@@ -301,47 +318,54 @@ export default function BookingClient() {
               ))}
             </div>
 
-            {/* Slot grid — 48 half-hour slots, compact layout */}
+            {/* Slot grid — 48 half-hour slots */}
             {loadingSlots ? (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                 {Array.from({ length: 48 }).map((_, i) => (
-                  <div key={i} className="h-12 rounded-lg bg-white/5 animate-pulse" />
+                  <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                 {slots.map(({ time, status }) => {
                   const isSelected = selectedSlot === time
                   const isPeak = isPeakHour(time)
                   const isUnavailable = status !== 'available'
 
+                  // Past slots are intentionally rendered identical to 'confirmed'
+                  // so customers can't audit which historical slots went unsold.
                   let bg = 'bg-navy-card border border-white/8 hover:border-orange/40 cursor-pointer'
                   if (isSelected) bg = 'bg-orange border border-orange shadow-lg shadow-orange/30 cursor-pointer'
                   else if (status === 'pending') bg = 'bg-amber-400/10 border border-amber-400/30 cursor-not-allowed'
-                  else if (status === 'confirmed') bg = 'bg-red-500/10 border border-red-500/20 cursor-not-allowed'
+                  else if (status === 'confirmed' || status === 'past') bg = 'bg-red-500/10 border border-red-500/20 cursor-not-allowed'
+                  else if (status === 'closed') bg = 'bg-white/[0.03] border border-white/5 cursor-not-allowed'
+
+                  // What we put on the second line of the chip
+                  let subLabel = ''
+                  if (status === 'past' || status === 'confirmed') subLabel = 'Taken'
+                  else if (status === 'pending') subLabel = 'Pending'
+                  else if (status === 'closed') subLabel = 'Closed'
+                  else subLabel = isPeak ? 'PKR 3,250' : 'PKR 1,500'
 
                   return (
                     <button
                       key={time}
                       onClick={() => handleSlotClick(time)}
                       disabled={isUnavailable}
-                      className={`relative rounded-lg px-1.5 py-2 text-center transition-all duration-150 ${bg}`}
+                      className={`relative rounded-xl p-3 text-left transition-all duration-150 ${bg}`}
                     >
-                      <p className={`font-poppins font-semibold text-[11px] sm:text-xs leading-none ${
+                      <p className={`font-poppins font-semibold text-sm leading-none ${
                         isSelected ? 'text-white' : isUnavailable ? 'text-white/25' : 'text-white'
                       }`}>
                         {formatTime(time)}
                       </p>
-                      <p className={`font-poppins text-[9px] sm:text-[10px] mt-1 leading-none ${
-                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/55'
+                      <p className={`font-poppins text-xs mt-1 ${
+                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/70'
                       }`}>
-                        {isUnavailable
-                          ? status === 'pending' ? 'Pending' : 'Taken'
-                          : isPeak ? '3.25k' : '1.5k'
-                        }
+                        {subLabel}
                       </p>
                       {isPeak && !isUnavailable && (
-                        <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} />
+                        <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} />
                       )}
                     </button>
                   )
