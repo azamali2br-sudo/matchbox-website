@@ -10,7 +10,12 @@ type Player = {
   rating: number
   wins: number
   losses: number
+  lastPlayedAt: string | null
 }
+
+type LeaderboardWindow = '7d' | '30d' | 'all'
+const PROVISIONAL_MATCHES = 5
+const WINDOW_DAYS: Record<LeaderboardWindow, number | null> = { '7d': 7, '30d': 30, all: null }
 
 type MatchPlayer = { id: string; name: string; rating: number }
 type SetScore = { t1: number; t2: number }
@@ -30,6 +35,7 @@ type Match = {
 
 export default function MatchIQClient() {
   const [tab, setTab] = useState<'leaderboard' | 'matches'>('leaderboard')
+  const [window, setWindow] = useState<LeaderboardWindow>('30d')
   const [players, setPlayers] = useState<Player[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [matchRatings, setMatchRatings] = useState<Record<string, Record<string, number>>>({})
@@ -116,7 +122,7 @@ export default function MatchIQClient() {
             ))}
           </div>
         ) : tab === 'leaderboard' ? (
-          <Leaderboard players={players} />
+          <Leaderboard players={players} window={window} setWindow={setWindow} />
         ) : (
           <RecentMatches matches={matches} matchRatings={matchRatings} />
         )}
@@ -125,7 +131,15 @@ export default function MatchIQClient() {
   )
 }
 
-function Leaderboard({ players }: { players: Player[] }) {
+function Leaderboard({
+  players,
+  window,
+  setWindow,
+}: {
+  players: Player[]
+  window: LeaderboardWindow
+  setWindow: (w: LeaderboardWindow) => void
+}) {
   if (players.length === 0) {
     return (
       <div className="text-center py-24">
@@ -138,6 +152,74 @@ function Leaderboard({ players }: { players: Player[] }) {
     )
   }
 
+  // Split players into established (>= PROVISIONAL_MATCHES) and new
+  const established = players.filter(p => (p.wins + p.losses) >= PROVISIONAL_MATCHES)
+  const provisional = players.filter(p => (p.wins + p.losses) < PROVISIONAL_MATCHES && (p.wins + p.losses) > 0)
+
+  // Apply time window filter to established players
+  const days = WINDOW_DAYS[window]
+  const cutoff = days === null ? null : Date.now() - days * 24 * 60 * 60 * 1000
+  const ranked = cutoff === null
+    ? established
+    : established.filter(p => p.lastPlayedAt && new Date(p.lastPlayedAt).getTime() >= cutoff)
+
+  return (
+    <div className="space-y-8">
+      {/* Window selector */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
+          {(['7d', '30d', 'all'] as const).map(w => (
+            <button
+              key={w}
+              onClick={() => setWindow(w)}
+              className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${
+                window === w ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'
+              }`}
+            >
+              {w === '7d' ? 'Last 7 days' : w === '30d' ? 'Last 30 days' : 'All time'}
+            </button>
+          ))}
+        </div>
+        <p className="font-poppins text-white/30 text-xs">
+          {ranked.length} {ranked.length === 1 ? 'player' : 'players'}
+          {window !== 'all' && ' active in window'}
+        </p>
+      </div>
+
+      {/* Ranked players */}
+      {ranked.length === 0 ? (
+        <div className="text-center py-12 bg-navy-card border border-white/8 rounded-2xl">
+          <p className="font-poppins text-white/40 text-sm mb-2">
+            No established players active in the {window === '7d' ? 'last 7 days' : 'last 30 days'}.
+          </p>
+          <button
+            onClick={() => setWindow('all')}
+            className="font-poppins text-orange text-sm font-semibold hover:underline"
+          >
+            See all time leaderboard →
+          </button>
+        </div>
+      ) : (
+        <PlayerList players={ranked} />
+      )}
+
+      {/* New players section */}
+      {provisional.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h3 className="font-qaranta text-xl text-white uppercase">New Players</h3>
+            <span className="font-poppins text-white/30 text-xs">
+              Calibrating · need {PROVISIONAL_MATCHES}+ matches to rank
+            </span>
+          </div>
+          <PlayerList players={provisional} provisional />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PlayerList({ players, provisional = false }: { players: Player[]; provisional?: boolean }) {
   return (
     <div className="space-y-2">
       {/* Header row — hidden on mobile, shown sm+ */}
@@ -151,8 +233,12 @@ function Leaderboard({ players }: { players: Player[] }) {
 
       {players.map((player, i) => {
         const rank = i + 1
-        const rankColor = rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/25'
-        const borderColor = rank === 1 ? 'border-yellow-400/20' : rank <= 3 ? 'border-orange/15' : 'border-white/6'
+        const rankColor = provisional
+          ? 'text-white/30'
+          : rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/25'
+        const borderColor = provisional
+          ? 'border-white/5'
+          : rank === 1 ? 'border-yellow-400/20' : rank <= 3 ? 'border-orange/15' : 'border-white/6'
         const matchesPlayed = player.wins + player.losses
         const winRate = matchesPlayed > 0 ? Math.round((player.wins / matchesPlayed) * 100) : null
 
@@ -164,9 +250,18 @@ function Leaderboard({ players }: { players: Player[] }) {
           >
             {/* Mobile layout: stacked */}
             <div className="sm:hidden flex items-center gap-3">
-              <span className={`font-qaranta text-lg w-6 shrink-0 ${rankColor}`}>{rank}</span>
+              <span className={`font-qaranta text-lg w-6 shrink-0 ${rankColor}`}>
+                {provisional ? '—' : rank}
+              </span>
               <div className="flex-1 min-w-0">
-                <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">{player.name}</p>
+                <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">
+                  {player.name}
+                  {provisional && (
+                    <span className="ml-2 font-poppins text-[10px] uppercase tracking-wider text-orange/70 bg-orange/10 border border-orange/20 rounded-full px-2 py-0.5">
+                      Calibrating
+                    </span>
+                  )}
+                </p>
                 <p className="font-poppins text-white/40 text-[11px] mt-0.5">
                   <span className="text-green-400">{player.wins}W</span>
                   <span className="text-white/20 mx-1">·</span>
@@ -179,16 +274,25 @@ function Leaderboard({ players }: { players: Player[] }) {
                   )}
                 </p>
               </div>
-              <p className="font-qaranta text-2xl text-orange shrink-0">{Math.round(player.rating)}</p>
+              <p className={`font-qaranta text-2xl shrink-0 ${provisional ? 'text-white/50' : 'text-orange'}`}>
+                {Math.round(player.rating)}
+              </p>
             </div>
 
             {/* Desktop layout: grid */}
             <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 items-center">
-              <span className={`font-qaranta text-lg ${rankColor}`}>{rank}</span>
-              <div>
-                <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors">{player.name}</p>
+              <span className={`font-qaranta text-lg ${rankColor}`}>{provisional ? '—' : rank}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
+                {provisional && (
+                  <span className="font-poppins text-[10px] uppercase tracking-wider text-orange/70 bg-orange/10 border border-orange/20 rounded-full px-2 py-0.5 shrink-0">
+                    Calibrating
+                  </span>
+                )}
               </div>
-              <p className="font-qaranta text-xl text-orange text-right">{Math.round(player.rating)}</p>
+              <p className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>
+                {Math.round(player.rating)}
+              </p>
               <p className="font-poppins text-white/50 text-xs text-center">
                 <span className="text-green-400">{player.wins}</span>
                 <span className="text-white/20 mx-1">/</span>
