@@ -4,7 +4,7 @@ export const ELO_START = 60
 export const ELO_FLOOR = 20
 export const ELO_CEILING = 95
 export const CALIBRATION_MATCHES = 10
-export const PROVISIONAL_MATCHES = 5
+export const PROVISIONAL_MATCHES = 3
 
 /**
  * Higher K for new players so ratings converge fast (standard Elo practice —

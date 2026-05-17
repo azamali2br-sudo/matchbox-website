@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
+import { PROVISIONAL_MATCHES } from '@/lib/elo'
 
 type Player = {
   id: string
@@ -14,7 +15,6 @@ type Player = {
 }
 
 type LeaderboardWindow = '7d' | '30d' | 'all'
-const PROVISIONAL_MATCHES = 5
 const WINDOW_DAYS: Record<LeaderboardWindow, number | null> = { '7d': 7, '30d': 30, all: null }
 
 type MatchPlayer = { id: string; name: string; rating: number }

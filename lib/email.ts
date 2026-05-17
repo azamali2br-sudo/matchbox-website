@@ -83,10 +83,12 @@ export async function sendBookingConfirmation(b: BookingForEmail): Promise<void>
 
   const resend = new Resend(apiKey)
   const from = process.env.EMAIL_FROM || 'Matchbox <onboarding@resend.dev>'
+  const replyTo = process.env.EMAIL_REPLY_TO || 'info@matchboxpadel.com'
 
   const { error } = await resend.emails.send({
     from,
     to: b.email,
+    replyTo,
     subject: `Booking pending — pay within 30 min to confirm (${b.ref})`,
     html: renderHtml(b),
   })

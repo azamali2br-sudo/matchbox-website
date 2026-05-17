@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PROVISIONAL_MATCHES } from "@/lib/elo";
 
 type Player = {
   id: string;
@@ -12,7 +13,6 @@ type Player = {
   lastPlayedAt: string | null;
 };
 
-const PROVISIONAL_MATCHES = 5;
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export default function MatchIQTeaser() {
