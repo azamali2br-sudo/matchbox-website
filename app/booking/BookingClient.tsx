@@ -301,15 +301,15 @@ export default function BookingClient() {
               ))}
             </div>
 
-            {/* Slot grid */}
+            {/* Slot grid — 48 half-hour slots, compact layout */}
             {loadingSlots ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {Array.from({ length: 24 }).map((_, i) => (
-                  <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+                {Array.from({ length: 48 }).map((_, i) => (
+                  <div key={i} className="h-12 rounded-lg bg-white/5 animate-pulse" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
                 {slots.map(({ time, status }) => {
                   const isSelected = selectedSlot === time
                   const isPeak = isPeakHour(time)
@@ -325,23 +325,23 @@ export default function BookingClient() {
                       key={time}
                       onClick={() => handleSlotClick(time)}
                       disabled={isUnavailable}
-                      className={`relative rounded-xl p-3 text-left transition-all duration-150 ${bg}`}
+                      className={`relative rounded-lg px-1.5 py-2 text-center transition-all duration-150 ${bg}`}
                     >
-                      <p className={`font-poppins font-semibold text-sm leading-none ${
+                      <p className={`font-poppins font-semibold text-[11px] sm:text-xs leading-none ${
                         isSelected ? 'text-white' : isUnavailable ? 'text-white/25' : 'text-white'
                       }`}>
                         {formatTime(time)}
                       </p>
-                      <p className={`font-poppins text-xs mt-1 ${
-                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/70'
+                      <p className={`font-poppins text-[9px] sm:text-[10px] mt-1 leading-none ${
+                        isSelected ? 'text-white/80' : isUnavailable ? 'text-white/20' : 'text-white/55'
                       }`}>
                         {isUnavailable
                           ? status === 'pending' ? 'Pending' : 'Taken'
-                          : isPeak ? 'PKR 3,250' : 'PKR 1,500'
+                          : isPeak ? '3.25k' : '1.5k'
                         }
                       </p>
                       {isPeak && !isUnavailable && (
-                        <div className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} title="Peak hour" />
+                        <div className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/80' : 'bg-orange'}`} />
                       )}
                     </button>
                   )

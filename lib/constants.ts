@@ -19,13 +19,13 @@ export const BANK_DETAILS = {
 export const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3]
 export const HOLD_DURATION_MINUTES = 30
 
-// Slots shown in the UI — 1-hour blocks for a full calendar day (midnight to 11 PM)
-export const TIME_SLOTS = [
-  '00:00', '01:00', '02:00', '03:00', '04:00', '05:00',
-  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
-  '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
-  '18:00', '19:00', '20:00', '21:00', '22:00', '23:00',
-]
+// Slots shown in the UI — 30-min granularity so non-integer-hour bookings
+// (1.5hr, 2.5hr) don't leave invisible 30-min gaps. 48 slots/day.
+export const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2)
+  const m = i % 2 === 0 ? '00' : '30'
+  return `${h.toString().padStart(2, '0')}:${m}`
+})
 
 export function isPeakHour(time: string): boolean {
   const hour = parseInt(time.split(':')[0])
@@ -71,6 +71,10 @@ export function addHoursToTime(time: string, hours: number): string {
   return `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`
 }
 
+// Slots are 30 minutes long. A booking overlaps a slot if any portion of
+// the booking falls inside the slot's [start, start+30) range.
+export const SLOT_DURATION_MINUTES = 30
+
 export function doesBookingOverlapSlot(
   bookingStart: string,
   bookingEnd: string,
@@ -79,7 +83,7 @@ export function doesBookingOverlapSlot(
   const bs = timeToNormalizedMinutes(bookingStart)
   let be = timeToNormalizedMinutes(bookingEnd)
   const ss = timeToNormalizedMinutes(slotStart)
-  const se = ss + 60
+  const se = ss + SLOT_DURATION_MINUTES
   if (be <= bs) be += 24 * 60 // handle bookings that cross midnight
   return bs < se && be > ss
 }
