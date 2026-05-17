@@ -66,12 +66,34 @@ export async function GET(request: NextRequest) {
 
   const { supabase, supabaseAdmin } = await import('@/lib/supabase')
 
-  // Expire pending holds (admin key — anon doesn't have UPDATE policy)
-  await supabaseAdmin
+  // Expire pending holds (admin key — anon doesn't have UPDATE policy).
+  // .select() returns the rows that flipped so we can fire one notification
+  // email each. Fire-and-forget so a Resend hiccup never blocks the GET.
+  const { data: expired } = await supabaseAdmin
     .from('bookings')
     .update({ status: 'cancelled' })
     .eq('status', 'pending')
     .lt('hold_expires_at', new Date().toISOString())
+    .select()
+
+  if (expired && expired.length > 0) {
+    import('@/lib/email').then(({ sendBookingExpired }) => {
+      for (const row of expired) {
+        const b = toBooking(row as Record<string, unknown>)
+        sendBookingExpired({
+          ref: b.ref,
+          court: b.court,
+          date: b.date,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          durationHours: b.durationHours,
+          name: b.name,
+          email: b.email,
+          totalPrice: b.totalPrice,
+        }).catch(err => console.error('[email] expired send failed:', err))
+      }
+    })
+  }
 
   // Public callers get only slot-availability fields; admin gets full rows
   const selectFields = isAdmin

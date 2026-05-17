@@ -32,6 +32,15 @@ export async function PATCH(
   }
 
   const { supabaseAdmin } = await import('@/lib/supabase')
+
+  // Fetch old row first so we can detect the pending → confirmed transition.
+  const { data: prev, error: fetchErr } = await supabaseAdmin
+    .from('bookings')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+
   const { data, error } = await supabaseAdmin
     .from('bookings')
     .update(update)
@@ -40,6 +49,24 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Fire confirmation email on pending → confirmed (fire-and-forget)
+  if (prev?.status === 'pending' && data?.status === 'confirmed') {
+    import('@/lib/email').then(({ sendBookingConfirmed }) =>
+      sendBookingConfirmed({
+        ref: data.ref,
+        court: data.court,
+        date: data.date,
+        startTime: data.start_time,
+        endTime: data.end_time,
+        durationHours: data.duration_hours,
+        name: data.name,
+        email: data.email,
+        totalPrice: data.total_price,
+      }).catch(err => console.error('[email] confirmed send failed:', err)),
+    )
+  }
+
   return NextResponse.json({ booking: data })
 }
 
