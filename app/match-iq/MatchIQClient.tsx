@@ -223,10 +223,11 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
   return (
     <div className="space-y-2">
       {/* Header row — hidden on mobile, shown sm+ */}
-      <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 px-5 pb-2">
+      <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_4rem_5rem_4rem] gap-4 px-5 pb-2">
         <div />
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Rating</span>
+        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-center">Matches</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-center">W / L</span>
         <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Win%</span>
       </div>
@@ -263,13 +264,15 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
                   )}
                 </p>
                 <p className="font-poppins text-white/40 text-[11px] mt-0.5">
+                  <span>{matchesPlayed} {matchesPlayed === 1 ? 'match' : 'matches'}</span>
+                  <span className="text-white/20 mx-1">·</span>
                   <span className="text-green-400">{player.wins}W</span>
                   <span className="text-white/20 mx-1">·</span>
                   <span className="text-red-400/70">{player.losses}L</span>
                   {winRate !== null && (
                     <>
                       <span className="text-white/20 mx-1">·</span>
-                      <span>{winRate}% win</span>
+                      <span>{winRate}%</span>
                     </>
                   )}
                 </p>
@@ -280,7 +283,7 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
             </div>
 
             {/* Desktop layout: grid */}
-            <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_5rem_4rem] gap-4 items-center">
+            <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_4rem_5rem_4rem] gap-4 items-center">
               <span className={`font-qaranta text-lg ${rankColor}`}>{provisional ? '—' : rank}</span>
               <div className="flex items-center gap-2 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
@@ -292,6 +295,9 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
               </div>
               <p className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>
                 {Math.round(player.rating)}
+              </p>
+              <p className="font-poppins text-white/60 text-sm text-center font-medium">
+                {matchesPlayed}
               </p>
               <p className="font-poppins text-white/50 text-xs text-center">
                 <span className="text-green-400">{player.wins}</span>
