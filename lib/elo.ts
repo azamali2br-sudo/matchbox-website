@@ -4,7 +4,9 @@ export const ELO_START = 60
 export const ELO_FLOOR = 20
 export const ELO_CEILING = 95
 export const CALIBRATION_MATCHES = 10
-export const PROVISIONAL_MATCHES = 3
+// Beta mode: 0 = no provisional gate, every player ranks from their first match.
+// Raise back to 3 after beta to hide first-timers until they've calibrated.
+export const PROVISIONAL_MATCHES = 0
 
 /**
  * Higher K for new players so ratings converge fast (standard Elo practice —

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { teamRating, calcNewRating, ELO_START } from '@/lib/elo'
+import { teamRating, calcNewRating, ELO_START, PROVISIONAL_MATCHES } from '@/lib/elo'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
 
   function rankMap(state: Record<string, Stats>): Record<string, number> {
     const ranked = Object.entries(state)
-      .filter(([id]) => (lifetimeMatchesById[id] ?? 0) >= 3) // PROVISIONAL_MATCHES
+      .filter(([id]) => (lifetimeMatchesById[id] ?? 0) >= PROVISIONAL_MATCHES)
       .sort(([idA, a], [idB, b]) => tieBreak(idA, a, idB, b))
     const ranks: Record<string, number> = {}
     ranked.forEach(([id], i) => { ranks[id] = i + 1 })
