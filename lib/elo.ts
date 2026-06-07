@@ -1,7 +1,7 @@
 export const ELO_K = 20
 export const ELO_K_NEW = 40
 export const ELO_START = 60
-export const ELO_FLOOR = 20
+export const ELO_FLOOR = 10
 export const ELO_CEILING = 99
 export const CALIBRATION_MATCHES = 10
 // Beta mode: 0 = no provisional gate, every player ranks from their first match.
