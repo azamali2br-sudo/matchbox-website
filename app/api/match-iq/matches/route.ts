@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/admin-auth'
 import { rateLimit } from '@/lib/rate-limit'
+import { titleCaseName } from '@/lib/format'
 
 const PHONE_RE = /^[+\d][\d\s()-]{6,19}$/
 
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
     } else {
       const { data: created, error } = await supabaseAdmin
         .from('players')
-        .insert({ name: p.name, phone: p.phone })
+        .insert({ name: titleCaseName(p.name), phone: p.phone })
         .select('id')
         .single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
