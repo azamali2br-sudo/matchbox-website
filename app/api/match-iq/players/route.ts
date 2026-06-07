@@ -56,6 +56,13 @@ export async function GET(request: NextRequest) {
         lifetimeMatches: (p.wins ?? 0) + (p.losses ?? 0),
         rankChange: null as number | null,
       }))
+      // Same tie-break as the windowed path (rating, then wins, then id) so
+      // tied players rank identically across all tabs.
+      .sort((a, b) =>
+        b.rating - a.rating ||
+        (b.wins ?? 0) - (a.wins ?? 0) ||
+        a.id.localeCompare(b.id)
+      )
     return NextResponse.json({ players: enriched, window: 'all' })
   }
 
