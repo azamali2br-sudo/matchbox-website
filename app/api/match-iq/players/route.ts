@@ -46,12 +46,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const enriched = (players ?? []).map(p => ({
-      ...p,
-      lastPlayedAt: lastPlayed[p.id] ?? null,
-      lifetimeMatches: (p.wins ?? 0) + (p.losses ?? 0),
-      rankChange: null as number | null,
-    }))
+    const enriched = (players ?? [])
+      // Only show players who've actually played, so the all-time tab matches
+      // the windowed tabs (which only include players with matches).
+      .filter(p => (p.wins ?? 0) + (p.losses ?? 0) > 0)
+      .map(p => ({
+        ...p,
+        lastPlayedAt: lastPlayed[p.id] ?? null,
+        lifetimeMatches: (p.wins ?? 0) + (p.losses ?? 0),
+        rankChange: null as number | null,
+      }))
     return NextResponse.json({ players: enriched, window: 'all' })
   }
 
