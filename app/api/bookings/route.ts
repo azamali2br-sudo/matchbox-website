@@ -3,12 +3,15 @@ import { randomBytes } from 'crypto'
 import { getDemoBookings, addDemoBooking, expireHolds, deriveStatus, type Booking } from '@/lib/mock-data'
 import { generateBookingRef, getTotalPrice, addHoursToTime, HOLD_DURATION_MINUTES } from '@/lib/constants'
 import { verifySessionToken, ADMIN_COOKIE } from '@/lib/admin-auth'
+import { getCurrentAccountId } from '@/lib/account-auth'
+import { getAccountById } from '@/lib/accounts'
+import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { normalizePhone } from '@/lib/phone'
 import { rateLimit } from '@/lib/rate-limit'
 import { cookies } from 'next/headers'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-const PHONE_RE = /^[+\d][\d\s()-]{6,19}$/
 const ALLOWED_COURTS = new Set(['A', 'B'])
 const ALLOWED_DURATIONS = new Set([1, 1.5, 2, 2.5, 3])
 
@@ -143,22 +146,59 @@ export async function POST(request: NextRequest) {
   if (limited) return limited
 
   const body = await request.json()
-  const { court, date, startTime, durationHours, name, phone, email, termsAccepted } = body
+  const { court, date, startTime, durationHours, termsAccepted } = body
 
-  if (!court || !date || !startTime || !durationHours || !name || !phone || !email) {
+  // ── Who is booking? ──────────────────────────────────────────────
+  // Online self-service requires a logged-in account (identity comes from the
+  // session, never the body — so it can't be spoofed). Admin (manual / WhatsApp)
+  // bookings bypass the gate and supply the customer's details directly.
+  const store = await cookies()
+  const isAdmin = verifySessionToken(store.get(ADMIN_COOKIE)?.value)
+
+  let name: string, phone: string, email: string, source: 'online' | 'admin' | 'whatsapp'
+  let accountPhone: string | null = null
+
+  if (isAdmin) {
+    // Manual booking — trust the admin-entered customer details.
+    name = typeof body.name === 'string' ? body.name.trim() : ''
+    phone = normalizePhone(typeof body.phone === 'string' ? body.phone : '')
+    email = typeof body.email === 'string' ? body.email.trim() : ''
+    source = body.source === 'admin' ? 'admin' : 'whatsapp'
+    if (name.length < 2 || name.length > 100) return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
+    if (!/^\+\d{8,15}$/.test(phone)) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
+    if (email && !EMAIL_RE.test(email)) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
+  } else {
+    // Online — must be logged in. Identity is the account, full stop.
+    const accountId = await getCurrentAccountId()
+    if (!accountId) {
+      return NextResponse.json({ error: 'Please log in to book.', needsAuth: true }, { status: 401 })
+    }
+    if (!DEMO_MODE) {
+      const { supabaseAdmin } = await import('@/lib/supabase')
+      const account = await getAccountById(supabaseAdmin, accountId)
+      if (!account) return NextResponse.json({ error: 'Please log in to book.', needsAuth: true }, { status: 401 })
+      name = account.name
+      phone = account.phone
+      email = account.email || ''
+      accountPhone = account.phone
+    } else {
+      // Demo fallback (no real accounts table) — accept body identity.
+      name = typeof body.name === 'string' ? body.name.trim() : 'Demo Player'
+      phone = normalizePhone(typeof body.phone === 'string' ? body.phone : '03000000000')
+      email = typeof body.email === 'string' ? body.email.trim() : 'demo@matchbox'
+    }
+    source = 'online'
+    if (!termsAccepted) {
+      return NextResponse.json({ error: 'You must accept the terms to book' }, { status: 400 })
+    }
+  }
+
+  if (!court || !date || !startTime || !durationHours) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   if (!ALLOWED_COURTS.has(court)) return NextResponse.json({ error: 'Invalid court' }, { status: 400 })
   if (!DATE_RE.test(date)) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
   if (!ALLOWED_DURATIONS.has(Number(durationHours))) return NextResponse.json({ error: 'Invalid duration' }, { status: 400 })
-  if (!EMAIL_RE.test(email)) return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
-  if (!PHONE_RE.test(phone)) return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
-  if (typeof name !== 'string' || name.trim().length < 2 || name.length > 100) {
-    return NextResponse.json({ error: 'Invalid name' }, { status: 400 })
-  }
-  if (!termsAccepted) {
-    return NextResponse.json({ error: 'You must accept the terms to book' }, { status: 400 })
-  }
 
   // Slot must not have started yet.
   const slotStartMs = new Date(`${date}T${startTime}:00+05:00`).getTime()
@@ -201,7 +241,7 @@ export async function POST(request: NextRequest) {
       holdExpiresAt,
       termsAcceptedAt: new Date().toISOString(),
       cancelToken,
-      source: 'online',
+      source,
       createdAt: new Date().toISOString(),
     }
     addDemoBooking(newBooking)
@@ -225,7 +265,7 @@ export async function POST(request: NextRequest) {
     hold_expires_at: holdExpiresAt,
     terms_accepted_at: new Date().toISOString(),
     cancel_token: cancelToken,
-    source: 'online',
+    source,
   }
 
   const { data, error } = await supabase.from('bookings').insert(row).select().single()
@@ -233,18 +273,40 @@ export async function POST(request: NextRequest) {
 
   const booking = toBooking(data)
 
-  // Awaited send — fire-and-forget gets killed by Vercel's serverless freeze.
-  try {
-    const { sendBookingConfirmation } = await import('@/lib/email')
-    await sendBookingConfirmation({
-      ref: booking.ref, court: booking.court, date: booking.date,
-      startTime: booking.startTime, endTime: booking.endTime,
-      durationHours: booking.durationHours, name: booking.name,
-      email: booking.email, totalPrice: booking.grandTotal,
-      holdExpiresAt: booking.holdExpiresAt, cancelToken: booking.cancelToken,
-    })
-  } catch (err) {
-    console.error('[email] send failed:', err)
+  // Apply credit at checkout (online + logged in only). Caps at min(balance, owed).
+  if (!isAdmin && accountPhone && Number(body.applyCredit) > 0) {
+    try {
+      const { supabaseAdmin } = await import('@/lib/supabase')
+      const balance = await getCreditBalance(supabaseAdmin, accountPhone)
+      const owed = booking.grandTotal - booking.paidAmount - booking.creditApplied
+      const amount = Math.min(Number(body.applyCredit), balance, owed)
+      if (amount > 0) {
+        const { newCreditApplied } = await redeemCredit(supabaseAdmin, {
+          phone: accountPhone, bookingId: booking.id, amount, currentCreditApplied: booking.creditApplied,
+        })
+        booking.creditApplied = newCreditApplied
+        booking.status = deriveStatus({ attendance: booking.attendance, paidAmount: booking.paidAmount, creditApplied: newCreditApplied, grandTotal: booking.grandTotal })
+      }
+    } catch (err) {
+      console.error('[credit] redeem at checkout failed:', err)
+    }
+  }
+
+  // Pending-payment email — online bookings with an email on file only.
+  // (Manual/admin bookings are arranged directly, so no automated email.)
+  if (source === 'online' && booking.email) {
+    try {
+      const { sendBookingConfirmation } = await import('@/lib/email')
+      await sendBookingConfirmation({
+        ref: booking.ref, court: booking.court, date: booking.date,
+        startTime: booking.startTime, endTime: booking.endTime,
+        durationHours: booking.durationHours, name: booking.name,
+        email: booking.email, totalPrice: booking.grandTotal,
+        holdExpiresAt: booking.holdExpiresAt, cancelToken: booking.cancelToken,
+      })
+    } catch (err) {
+      console.error('[email] send failed:', err)
+    }
   }
 
   return NextResponse.json({ booking })

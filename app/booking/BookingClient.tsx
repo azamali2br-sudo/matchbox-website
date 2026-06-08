@@ -57,10 +57,30 @@ export default function BookingClient() {
   const [step, setStep] = useState<Step>('calendar')
   const [successData, setSuccessData] = useState<SuccessData | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [form, setForm] = useState({ name: '', phone: '', email: '' })
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [demoMode, setDemoMode] = useState(false)
+  const [account, setAccount] = useState<{ name: string; phone: string; email: string | null } | null>(null)
+  const [creditBalance, setCreditBalance] = useState(0)
+  const [authLoaded, setAuthLoaded] = useState(false)
+  const [applyCredit, setApplyCredit] = useState(false)
+
+  // Who's booking? Online booking requires a logged-in account; identity is
+  // taken from the session server-side, so we just prefill the display here.
+  useEffect(() => {
+    fetch('/api/account/me')
+      .then(async r => {
+        if (r.ok) {
+          const d = await r.json()
+          setAccount(d.account)
+          setCreditBalance(d.credit?.balance ?? 0)
+        } else {
+          setAccount(null)
+        }
+      })
+      .catch(() => setAccount(null))
+      .finally(() => setAuthLoaded(true))
+  }, [])
 
   const fetchSlots = useCallback(async () => {
     setLoadingSlots(true)
@@ -133,21 +153,22 @@ export default function BookingClient() {
     setDate(d.toISOString().split('T')[0])
   }
 
+  // Identity comes from the logged-in account; only the terms tick is validated here.
   function validate() {
     const e: Record<string, string> = {}
-    if (!form.name.trim()) e.name = 'Name is required'
-    if (!form.phone.trim()) e.phone = 'Phone number is required'
-    if (!form.email.trim()) e.email = 'Email is required'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email'
     if (!termsAccepted) e.terms = 'Please agree to the booking terms'
     return e
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!account) { window.location.href = '/login'; return }
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     if (!selectedSlot) return
+
+    const price = getTotalPrice(selectedSlot, duration)
+    const creditToApply = applyCredit ? Math.min(creditBalance, price) : 0
 
     setSubmitting(true)
     try {
@@ -159,13 +180,12 @@ export default function BookingClient() {
           date,
           startTime: selectedSlot,
           durationHours: duration,
-          name: form.name.trim(),
-          phone: form.phone.trim(),
-          email: form.email.trim(),
           termsAccepted: true,
+          applyCredit: creditToApply,
         }),
       })
       const data = await res.json()
+      if (res.status === 401) { window.location.href = '/login'; return }
       if (!res.ok) throw new Error(data.error)
 
       setSuccessData({
@@ -175,7 +195,7 @@ export default function BookingClient() {
         startTime: selectedSlot,
         endTime: addHoursToTime(selectedSlot, duration),
         durationHours: duration,
-        name: form.name.trim(),
+        name: account.name,
         totalPrice: getTotalPrice(selectedSlot, duration),
         holdExpiresAt: data.booking.holdExpiresAt,
         cancelToken: data.booking.cancelToken,
@@ -192,9 +212,12 @@ export default function BookingClient() {
     return <SuccessScreen data={successData} onBookAnother={() => {
       setStep('calendar')
       setSelectedSlot(null)
-      setForm({ name: '', phone: '', email: '' })
+      setTermsAccepted(false)
+      setApplyCredit(false)
       setErrors({})
       fetchSlots()
+      // refresh credit balance (it may have been spent on the booking just made)
+      fetch('/api/account/me').then(async r => { if (r.ok) { const d = await r.json(); setCreditBalance(d.credit?.balance ?? 0) } })
     }} />
   }
 
@@ -474,27 +497,56 @@ export default function BookingClient() {
                     </>
                   )}
 
-                  {/* Booking form */}
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    {(['name', 'phone', 'email'] as const).map(field => (
-                      <div key={field}>
-                        <input
-                          type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
-                          placeholder={field === 'name' ? 'Full Name' : field === 'phone' ? 'Phone Number (e.g. 0322...)' : 'Email Address'}
-                          value={form[field]}
-                          onChange={e => {
-                            setForm(prev => ({ ...prev, [field]: e.target.value }))
-                            if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
-                          }}
-                          className={`w-full bg-navy border rounded-xl px-4 py-3 font-poppins text-sm text-white placeholder:text-white/25 outline-none focus:border-orange/50 transition-colors ${
-                            errors[field] ? 'border-red-400/60' : 'border-white/10'
-                          }`}
-                        />
-                        {errors[field] && (
-                          <p className="font-poppins text-red-400 text-xs mt-1">{errors[field]}</p>
-                        )}
+                  {/* Gate: online booking needs a logged-in account. */}
+                  {!authLoaded ? (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-orange/40 border-t-orange rounded-full animate-spin" />
+                    </div>
+                  ) : !account ? (
+                    <div className="bg-navy rounded-2xl border border-white/8 p-6 text-center">
+                      <div className="w-12 h-12 rounded-xl bg-orange/10 border border-orange/20 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M16 12a4 4 0 10-8 0m12 8H4a1 1 0 01-1-1v-6a1 1 0 011-1h16a1 1 0 011 1v6a1 1 0 01-1 1z" /></svg>
                       </div>
-                    ))}
+                      <h4 className="font-qaranta text-xl text-white mb-1">Log in to lock this slot</h4>
+                      <p className="font-poppins text-white/45 text-xs leading-relaxed mb-5">
+                        One quick sign-up and you&apos;re set for good — your bookings, credit, and Match IQ rating all live in one place.
+                      </p>
+                      <Link href="/login" className="block w-full bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-all mb-2">Log in</Link>
+                      <Link href="/signup" className="block w-full border border-white/12 hover:border-orange/40 text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-colors">Create an account</Link>
+                      <p className="font-poppins text-white/25 text-[11px] mt-4">Your slot selection is saved — just come right back.</p>
+                    </div>
+                  ) : (
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Booking as — identity from the logged-in account */}
+                    <div className="bg-navy rounded-xl border border-white/8 px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-poppins text-white/40 text-[11px]">Booking as</p>
+                        <p className="font-poppins text-white text-sm font-medium truncate">{account.name}</p>
+                        <p className="font-poppins text-white/40 text-xs truncate">{account.phone}{account.email ? ` · ${account.email}` : ''}</p>
+                      </div>
+                      <svg className="w-5 h-5 text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+
+                    {/* Apply credit at checkout */}
+                    {creditBalance > 0 && price !== null && (
+                      <label className="flex items-center justify-between gap-3 bg-orange/8 border border-orange/20 rounded-xl px-4 py-3 cursor-pointer">
+                        <div>
+                          <p className="font-poppins text-white text-sm font-medium">Apply credit</p>
+                          <p className="font-poppins text-white/50 text-xs">
+                            {formatCurrency(creditBalance)} available
+                            {applyCredit && (
+                              <span className="text-orange"> · −{formatCurrency(Math.min(creditBalance, price))} → pay {formatCurrency(Math.max(0, price - creditBalance))}</span>
+                            )}
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={applyCredit}
+                          onChange={e => setApplyCredit(e.target.checked)}
+                          className="w-5 h-5 rounded border-white/20 bg-navy accent-orange shrink-0"
+                        />
+                      </label>
+                    )}
 
                     {errors.submit && (
                       <p className="font-poppins text-red-400 text-xs">{errors.submit}</p>
@@ -560,6 +612,7 @@ export default function BookingClient() {
                       </p>
                     </div>
                   </form>
+                  )}
                 </div>
               </div>
             )}

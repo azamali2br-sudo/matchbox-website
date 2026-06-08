@@ -181,6 +181,30 @@ async function send(to: string, subject: string, html: string): Promise<void> {
   if (error) console.error('[email] Resend error:', error)
 }
 
+function renderMagicLinkHtml(args: { name?: string; link: string; isSignup: boolean }): string {
+  const greeting = args.name ? `Hey ${args.name},` : 'Hey,'
+  const lead = args.isSignup
+    ? 'Tap the button below to verify your email and finish setting up your Matchbox account. Your rating, credit, and booking history are waiting inside.'
+    : 'Tap the button below to log in to your Matchbox account. No password needed.'
+  const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">${greeting}</p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.5">${lead}</p>
+    <div style="text-align:center;margin:8px 0 8px">
+      <a href="${args.link}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:15px">${args.isSignup ? 'Verify & open my account' : 'Log in to Matchbox'}</a>
+    </div>
+    <p style="margin:20px 0 0;font-size:13px;color:#6b7280;line-height:1.5">This link works once and expires in 30 minutes. If you didn't request it, you can safely ignore this email.</p>`
+  return shell(ORANGE, args.isSignup ? 'Verify your account' : 'Log in', body)
+}
+
+export async function sendMagicLink(args: { to: string; name?: string; link: string; isSignup: boolean }): Promise<void> {
+  // Dev affordance: surface the link in the server log so it can be clicked
+  // locally without checking an inbox.
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`\n[magic-link] ${args.isSignup ? 'SIGNUP' : 'LOGIN'} for ${args.to}:\n  ${args.link}\n`)
+  }
+  const subject = args.isSignup ? 'Verify your Matchbox account' : 'Your Matchbox login link'
+  return send(args.to, subject, renderMagicLinkHtml(args))
+}
+
 export async function sendBookingConfirmation(b: BookingForEmail): Promise<void> {
   return send(b.email, `Booking pending — pay within 30 min to confirm (${b.ref})`, renderPendingHtml(b))
 }

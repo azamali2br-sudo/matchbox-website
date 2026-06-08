@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { titleCaseName } from '@/lib/format'
 
-const PHONE_RE = /^[+\d][\d\s()-]{6,19}$/
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
 const MATCH_SELECT = `
   id, played_on, court, start_time, team1_score, team2_score, set_scores, status, submitted_by, created_at,
@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { playedOn, court, startTime, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
 
-  if (!playedOn || !team1?.[0] || !team1?.[1] || !team2?.[0] || !team2?.[1]) {
+  // team1 / team2 are arrays of two ACCOUNT ids picked from the name search.
+  if (!playedOn || !Array.isArray(team1) || !Array.isArray(team2) || team1.length !== 2 || team2.length !== 2) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
   if (team1Score == null || team2Score == null) {
@@ -80,25 +81,33 @@ export async function POST(request: NextRequest) {
   if (s1 === s2) {
     return NextResponse.json({ error: 'Match cannot end in a tie' }, { status: 400 })
   }
-  for (const p of [...team1, ...team2]) {
-    if (!p?.phone || !PHONE_RE.test(p.phone)) {
-      return NextResponse.json({ error: 'Invalid player phone' }, { status: 400 })
-    }
-    if (typeof p.name !== 'string' || p.name.trim().length < 2 || p.name.length > 100) {
-      return NextResponse.json({ error: 'Invalid player name' }, { status: 400 })
-    }
+
+  const accountIds: string[] = [...team1, ...team2]
+  if (accountIds.some(id => typeof id !== 'string' || !UUID_RE.test(id))) {
+    return NextResponse.json({ error: 'Invalid player selection' }, { status: 400 })
   }
-  const phones = [...team1, ...team2].map(p => p.phone)
-  if (new Set(phones).size !== 4) {
+  if (new Set(accountIds).size !== 4) {
     return NextResponse.json({ error: 'A player can only appear once' }, { status: 400 })
   }
 
+  // Resolve each picked account → a Match IQ player. Only registered accounts
+  // are accepted (no on-the-fly player creation from arbitrary input). A player
+  // row is created from the account on their first-ever match, keyed by phone.
   const playerIds: string[] = []
-  for (const p of [...team1, ...team2]) {
+  for (const accountId of accountIds) {
+    const { data: account } = await supabaseAdmin
+      .from('accounts')
+      .select('id, name, phone')
+      .eq('id', accountId)
+      .maybeSingle()
+    if (!account) {
+      return NextResponse.json({ error: 'One of the selected players is not registered.' }, { status: 400 })
+    }
+
     const { data: existing } = await supabaseAdmin
       .from('players')
       .select('id')
-      .eq('phone', p.phone)
+      .eq('phone', account.phone)
       .maybeSingle()
 
     if (existing) {
@@ -106,7 +115,7 @@ export async function POST(request: NextRequest) {
     } else {
       const { data: created, error } = await supabaseAdmin
         .from('players')
-        .insert({ name: titleCaseName(p.name), phone: p.phone })
+        .insert({ name: titleCaseName(account.name), phone: account.phone })
         .select('id')
         .single()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

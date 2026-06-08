@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { consumeMagicToken } from '@/lib/accounts'
+import { createAccountSession, accountCookieOptions, ACCOUNT_COOKIE } from '@/lib/account-auth'
+
+const TOKEN_RE = /^[a-f0-9]{64}$/
+
+// The magic link lands here. Consume the token, set the session cookie, and
+// redirect into the account. Single-use — a consumed/expired link bounces to login.
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> },
+) {
+  const { token } = await params
+  const base = new URL(request.url).origin
+
+  if (!TOKEN_RE.test(token)) {
+    return NextResponse.redirect(`${base}/login?error=invalid`)
+  }
+
+  const { supabaseAdmin } = await import('@/lib/supabase')
+  let account
+  try {
+    account = await consumeMagicToken(supabaseAdmin, token)
+  } catch {
+    return NextResponse.redirect(`${base}/login?error=server`)
+  }
+  if (!account) {
+    return NextResponse.redirect(`${base}/login?error=expired`)
+  }
+
+  const res = NextResponse.redirect(`${base}/account`)
+  res.cookies.set(ACCOUNT_COOKIE, createAccountSession(account.id), accountCookieOptions())
+  return res
+}

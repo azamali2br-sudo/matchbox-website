@@ -15,6 +15,7 @@ const navLinks = [
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -22,6 +23,16 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Lightweight session probe so the nav shows "My Account" vs "Log in".
+  useEffect(() => {
+    fetch("/api/account/me")
+      .then((r) => setLoggedIn(r.ok))
+      .catch(() => setLoggedIn(false));
+  }, [pathname]);
+
+  const accountHref = loggedIn ? "/account" : "/login";
+  const accountLabel = loggedIn ? "My Account" : "Log in";
 
   if (pathname?.startsWith("/admin")) return null;
 
@@ -57,12 +68,20 @@ export default function Navbar() {
           ))}
         </div>
 
-        <Link
-          href="/booking"
-          className="hidden md:inline-flex items-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-6 py-3 rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-orange/25"
-        >
-          Book Now
-        </Link>
+        <div className="hidden md:flex items-center gap-5">
+          <Link
+            href={accountHref}
+            className="font-poppins text-white/75 hover:text-white text-sm font-medium transition-colors duration-200"
+          >
+            {accountLabel}
+          </Link>
+          <Link
+            href="/booking"
+            className="inline-flex items-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-6 py-3 rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-orange/25"
+          >
+            Book Now
+          </Link>
+        </div>
 
         <button
           onClick={() => setOpen(!open)}
@@ -93,6 +112,13 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          <Link
+            href={accountHref}
+            className="font-poppins text-white/80 hover:text-white text-sm font-medium transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            {accountLabel}
+          </Link>
           <Link
             href="/booking"
             className="bg-orange text-white font-poppins font-semibold text-sm px-6 py-3 rounded-full text-center mt-2"

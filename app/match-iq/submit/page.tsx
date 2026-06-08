@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { TIME_SLOTS, formatTime } from '@/lib/constants'
+import { TIME_SLOTS, formatTime, getTodayStr } from '@/lib/constants'
 
-type PlayerSlot = { name: string; phone: string; known: boolean; lookingUp: boolean }
+type Sel = { id: string; name: string }
 type SetScore = { t1: string; t2: string }
-
-const emptySlot = (): PlayerSlot => ({ name: '', phone: '', known: false, lookingUp: false })
 
 function setsPlayed(t1: number, t2: number): number {
   return t1 + t2
@@ -20,17 +18,111 @@ function isValidSetsScore(t1: string, t2: string): boolean {
   return (a === 2 && (b === 0 || b === 1)) || (b === 2 && (a === 0 || a === 1))
 }
 
+// Name-search picker over registered accounts. Shows names only; the phone is
+// resolved server-side from the chosen id. Only account-holders are selectable —
+// there is no manual "add a player" path (that's the whole point: to be rated,
+// you must have an account).
+function PlayerPicker({
+  label, selected, excludeIds, onSelect,
+}: {
+  label: string
+  selected: Sel | null
+  excludeIds: string[]
+  onSelect: (s: Sel | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Sel[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (selected) return
+    const q = query.trim()
+    // All state updates happen inside the (async) timer callback, never
+    // synchronously in the effect body.
+    const t = setTimeout(async () => {
+      if (q.length < 1) { setResults([]); return }
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/match-iq/players/search?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setResults(data.players ?? [])
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, q.length < 1 ? 0 : 200)
+    return () => clearTimeout(t)
+  }, [query, selected])
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 bg-green-500/5 border border-green-500/25 rounded-xl px-4 py-3">
+        <span className="font-poppins text-green-300 text-sm truncate flex items-center gap-2">
+          <span className="text-green-400">✓</span>{selected.name}
+        </span>
+        <button
+          type="button"
+          onClick={() => { onSelect(null); setQuery('') }}
+          className="font-poppins text-white/40 hover:text-white text-xs shrink-0 transition-colors"
+        >
+          Change
+        </button>
+      </div>
+    )
+  }
+
+  const visible = results.filter(r => !excludeIds.includes(r.id))
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        placeholder={label}
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="w-full bg-navy border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/20"
+      />
+      {loading && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange/40 border-t-orange rounded-full animate-spin" />
+      )}
+      {open && query.trim().length >= 1 && (
+        <div className="absolute z-20 mt-1 w-full bg-navy-card border border-white/10 rounded-xl shadow-xl shadow-black/40 max-h-56 overflow-y-auto">
+          {visible.length === 0 && !loading ? (
+            <div className="px-4 py-3 font-poppins text-white/40 text-xs leading-relaxed">
+              No registered player matches “{query.trim()}”. They need a Matchbox account to be added to a match.
+            </div>
+          ) : (
+            visible.map(r => (
+              <button
+                key={r.id}
+                type="button"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { onSelect(r); setOpen(false); setQuery('') }}
+                className="block w-full text-left px-4 py-2.5 font-poppins text-white text-sm hover:bg-orange/10 transition-colors"
+              >
+                {r.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SubmitMatchPage() {
-  const [players, setPlayers] = useState<[PlayerSlot, PlayerSlot, PlayerSlot, PlayerSlot]>([
-    emptySlot(), emptySlot(), emptySlot(), emptySlot(),
-  ])
+  const [players, setPlayers] = useState<(Sel | null)[]>([null, null, null, null])
   const [court, setCourt] = useState<'A' | 'B' | ''>('')
   const [startTime, setStartTime] = useState('')
   const [team1Sets, setTeam1Sets] = useState('')
   const [team2Sets, setTeam2Sets] = useState('')
   const [showSetScores, setShowSetScores] = useState(false)
   const [setScores, setSetScores] = useState<SetScore[]>([])
-  const [playedOn, setPlayedOn] = useState(new Date().toISOString().split('T')[0])
+  const [playedOn, setPlayedOn] = useState(getTodayStr())
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -38,7 +130,6 @@ export default function SubmitMatchPage() {
   const validScore = isValidSetsScore(team1Sets, team2Sets)
   const totalSets = validScore ? setsPlayed(parseInt(team1Sets), parseInt(team2Sets)) : 0
 
-  // Sync set score rows when total sets changes
   useEffect(() => {
     if (!validScore) {
       setShowSetScores(false)
@@ -47,19 +138,13 @@ export default function SubmitMatchPage() {
     }
     setSetScores(prev => {
       const next: SetScore[] = []
-      for (let i = 0; i < totalSets; i++) {
-        next.push(prev[i] ?? { t1: '', t2: '' })
-      }
+      for (let i = 0; i < totalSets; i++) next.push(prev[i] ?? { t1: '', t2: '' })
       return next
     })
   }, [totalSets, validScore])
 
-  function updateSlot(i: number, fields: Partial<PlayerSlot>) {
-    setPlayers(prev => {
-      const next = [...prev] as typeof prev
-      next[i] = { ...next[i], ...fields }
-      return next
-    })
+  function setPlayer(i: number, sel: Sel | null) {
+    setPlayers(prev => prev.map((p, idx) => (idx === i ? sel : p)))
   }
 
   function updateSetScore(i: number, field: 't1' | 't2', value: string) {
@@ -70,49 +155,24 @@ export default function SubmitMatchPage() {
     })
   }
 
-  async function lookupPhone(i: number, phone: string) {
-    if (phone.length < 7) return
-    updateSlot(i, { lookingUp: true })
-    try {
-      const res = await fetch(`/api/match-iq/players?phone=${encodeURIComponent(phone)}`)
-      const data = await res.json()
-      if (data.player) {
-        updateSlot(i, { name: data.player.name, known: true, lookingUp: false })
-      } else {
-        updateSlot(i, { known: false, lookingUp: false })
-      }
-    } catch {
-      updateSlot(i, { lookingUp: false })
-    }
-  }
+  const selectedIds = players.filter(Boolean).map(p => (p as Sel).id)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
 
-    for (let i = 0; i < 4; i++) {
-      if (!players[i].name.trim() || !players[i].phone.trim()) {
-        setError(`Player ${i + 1} name and phone are required.`)
-        return
-      }
-    }
-    const phones = players.map(p => p.phone.trim())
-    if (new Set(phones).size < 4) {
-      setError('All 4 players must be different people. Duplicate phone number detected.')
+    if (players.some(p => !p)) {
+      setError('Pick all 4 players from the list. Only registered players can be added.')
       return
     }
-    if (!court) {
-      setError('Please select which court you played on.')
+    const ids = players.map(p => (p as Sel).id)
+    if (new Set(ids).size < 4) {
+      setError('All 4 players must be different people.')
       return
     }
-    if (!startTime) {
-      setError('Please select the time slot you played.')
-      return
-    }
-    if (!validScore) {
-      setError('Score must be 2–0 or 2–1 (sets won, best of 3).')
-      return
-    }
+    if (!court) { setError('Please select which court you played on.'); return }
+    if (!startTime) { setError('Please select the time slot you played.'); return }
+    if (!validScore) { setError('Score must be 2–0 or 2–1 (sets won, best of 3).'); return }
 
     const parsedSetScores = showSetScores
       ? setScores.map(s => ({ t1: parseInt(s.t1) || 0, t2: parseInt(s.t2) || 0 }))
@@ -127,12 +187,12 @@ export default function SubmitMatchPage() {
           playedOn,
           court,
           startTime,
-          team1: [players[0], players[1]],
-          team2: [players[2], players[3]],
+          team1: [ids[0], ids[1]],
+          team2: [ids[2], ids[3]],
           team1Score: parseInt(team1Sets),
           team2Score: parseInt(team2Sets),
           setScores: parsedSetScores,
-          submittedBy: players[0].phone,
+          submittedBy: ids[0],
         }),
       })
       const data = await res.json()
@@ -147,7 +207,7 @@ export default function SubmitMatchPage() {
 
   function reset() {
     setSuccess(false)
-    setPlayers([emptySlot(), emptySlot(), emptySlot(), emptySlot()])
+    setPlayers([null, null, null, null])
     setCourt('')
     setStartTime('')
     setTeam1Sets('')
@@ -192,7 +252,7 @@ export default function SubmitMatchPage() {
 
         <h1 className="font-qaranta text-5xl text-white uppercase mb-2">Submit <span className="text-orange">Match</span></h1>
         <p className="font-poppins text-white/40 text-sm mb-10">
-          Enter all 4 players and the final score. Pending admin approval before ratings update.
+          Search and pick all 4 players, then enter the final score. Pending admin approval before ratings update.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -203,7 +263,7 @@ export default function SubmitMatchPage() {
               <input
                 type="date"
                 value={playedOn}
-                max={new Date().toISOString().split('T')[0]}
+                max={getTodayStr()}
                 onChange={e => setPlayedOn(e.target.value)}
                 className="w-full bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors"
               />
@@ -254,38 +314,14 @@ export default function SubmitMatchPage() {
               <div className="space-y-4">
                 {[0, 1].map(slotOffset => {
                   const i = teamIdx * 2 + slotOffset
-                  const slot = players[i]
                   return (
-                    <div key={i} className="grid grid-cols-2 gap-3">
-                      <div className="relative">
-                        <input
-                          type="tel"
-                          placeholder={`Player ${slotOffset + 1} phone`}
-                          value={slot.phone}
-                          onChange={e => updateSlot(i, { phone: e.target.value, known: false })}
-                          onBlur={e => lookupPhone(i, e.target.value)}
-                          className="w-full bg-navy border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors placeholder:text-white/20"
-                        />
-                        {slot.lookingUp && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-orange/40 border-t-orange rounded-full animate-spin" />
-                        )}
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Full name"
-                          value={slot.name}
-                          readOnly={slot.known}
-                          onChange={e => updateSlot(i, { name: e.target.value })}
-                          className={`w-full border font-poppins text-sm px-4 py-3 rounded-xl outline-none transition-colors placeholder:text-white/20 ${
-                            slot.known
-                              ? 'bg-green-500/5 border-green-500/25 text-green-300 cursor-default'
-                              : 'bg-navy border-white/10 text-white focus:border-orange/50'
-                          }`}
-                        />
-                        {slot.known && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-xs">✓</span>}
-                      </div>
-                    </div>
+                    <PlayerPicker
+                      key={i}
+                      label={`Search player ${slotOffset + 1} by name`}
+                      selected={players[i]}
+                      excludeIds={selectedIds.filter(id => id !== players[i]?.id)}
+                      onSelect={sel => setPlayer(i, sel)}
+                    />
                   )
                 })}
               </div>
@@ -393,8 +429,9 @@ export default function SubmitMatchPage() {
             {submitting ? 'Submitting...' : 'Submit Match for Review'}
           </button>
 
-          <p className="font-poppins text-white/25 text-xs text-center">
-            New players are automatically registered on their first match.
+          <p className="font-poppins text-white/25 text-xs text-center leading-relaxed">
+            Only players with a Matchbox account appear in the search. No account, no rating —
+            anyone can <Link href="/signup" className="text-orange/70 hover:text-orange">sign up</Link> to join the rankings.
           </p>
         </form>
       </div>
