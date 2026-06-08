@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { formatTime, formatDate, formatCurrency, getTodayStr, getDateStr } from '@/lib/constants'
+import { formatTime, formatDate, formatCurrency, getTodayStr, getDateStr, TIME_SLOTS, DURATION_OPTIONS, getTotalPrice } from '@/lib/constants'
 import type { Booking, Attendance } from '@/lib/mock-data'
 
-type AdminTab = 'today' | 'outstanding' | 'cancellations' | 'customers' | 'matchiq'
+type AdminTab = 'today' | 'newbooking' | 'outstanding' | 'cancellations' | 'customers' | 'matchiq'
 
 export default function AdminClient() {
   const [authed, setAuthed] = useState(false)
@@ -138,7 +138,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* Tab switcher */}
         <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 mb-6 overflow-x-auto">
-          {(['today', 'outstanding', 'cancellations', 'customers', 'matchiq'] as AdminTab[]).map(t => (
+          {(['today', 'newbooking', 'outstanding', 'cancellations', 'customers', 'matchiq'] as AdminTab[]).map(t => (
             <button
               key={t} onClick={() => setTab(t)}
               className={`font-poppins text-xs font-semibold px-4 py-2.5 rounded-lg transition-all whitespace-nowrap ${
@@ -146,6 +146,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               }`}
             >
               {t === 'today' ? 'Today' :
+               t === 'newbooking' ? '+ New Booking' :
                t === 'outstanding' ? 'Outstanding' :
                t === 'cancellations' ? 'Cancellations' :
                t === 'customers' ? 'Customers' :
@@ -155,6 +156,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
 
         {tab === 'matchiq' ? <MatchIQAdmin /> :
+         tab === 'newbooking' ? <NewBookingTab onCreated={() => { fetchAll(); setTab('today') }} /> :
          loading ? <Loading /> :
          tab === 'today' ? <TodayTab bookings={bookings} onUpdate={updateBooking} onRefresh={fetchAll} /> :
          tab === 'outstanding' ? <OutstandingTab bookings={bookings} onUpdate={updateBooking} onRefresh={fetchAll} /> :
@@ -167,6 +169,142 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
 function Loading() {
   return <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="h-20 bg-navy-card rounded-2xl animate-pulse" />)}</div>
+}
+
+// ─────────────────────────────────────────────────────────────
+// NEW BOOKING TAB — admin-created manual / WhatsApp booking.
+// Online booking requires a customer login; this is how staff log a booking
+// made over WhatsApp, phone, or at the desk. Tagged by source so manual
+// bookings stay distinguishable in the data. No 30-min hold, no online credit.
+// ─────────────────────────────────────────────────────────────
+
+function NewBookingTab({ onCreated }: { onCreated: () => void }) {
+  const [court, setCourt] = useState<'A' | 'B'>('A')
+  const [date, setDate] = useState(getTodayStr())
+  const [startTime, setStartTime] = useState('')
+  const [duration, setDuration] = useState(1)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [source, setSource] = useState<'whatsapp' | 'admin'>('whatsapp')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const price = startTime ? getTotalPrice(startTime, duration) : null
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (name.trim().length < 2) { setError('Customer name is required.'); return }
+    if (!phone.trim()) { setError('Phone number is required.'); return }
+    if (!startTime) { setError('Pick a start time.'); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          court, date, startTime, durationHours: duration,
+          name: name.trim(), phone: phone.trim(), email: email.trim(), source,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Could not create booking.'); return }
+      onCreated()
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const inputCls = 'w-full bg-navy border border-white/10 text-white font-poppins text-sm px-4 py-2.5 rounded-xl outline-none focus:border-orange/50 placeholder:text-white/25'
+
+  return (
+    <div className="max-w-2xl">
+      <div className="bg-navy-card border border-white/8 rounded-2xl p-6">
+        <h2 className="font-qaranta text-2xl text-white uppercase mb-1">New Manual Booking</h2>
+        <p className="font-poppins text-white/40 text-sm mb-6">
+          For WhatsApp, phone, or walk-in bookings. Tagged as manual (no online credit issued). The customer doesn&apos;t need an account.
+        </p>
+        <form onSubmit={submit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Court</label>
+              <div className="flex gap-2">
+                {(['A', 'B'] as const).map(c => (
+                  <button key={c} type="button" onClick={() => setCourt(c)}
+                    className={`flex-1 rounded-xl font-poppins text-sm font-semibold border py-2.5 transition-all ${court === c ? 'bg-orange border-orange text-white' : 'bg-navy border-white/10 text-white/50 hover:text-white'}`}>
+                    Box {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Date</label>
+              <input type="date" value={date} min={getDateStr(-7)} max={getDateStr(60)} onChange={e => setDate(e.target.value)}
+                className={`${inputCls} [color-scheme:dark]`} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Start time</label>
+              <select value={startTime} onChange={e => setStartTime(e.target.value)} className={`${inputCls} appearance-none`}>
+                <option value="" disabled>Select time</option>
+                {TIME_SLOTS.map(t => <option key={t} value={t}>{formatTime(t)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Duration</label>
+              <div className="flex flex-wrap gap-2">
+                {DURATION_OPTIONS.map(d => (
+                  <button key={d} type="button" onClick={() => setDuration(d)}
+                    className={`px-3 py-2 rounded-xl font-poppins text-sm font-medium border ${duration === d ? 'bg-orange border-orange text-white' : 'bg-navy border-white/10 text-white/60 hover:text-white'}`}>
+                    {d}hr
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input type="text" placeholder="Customer name" value={name} onChange={e => setName(e.target.value)} className={inputCls} />
+            <input type="tel" placeholder="Phone (e.g. 0300...)" value={phone} onChange={e => setPhone(e.target.value)} className={inputCls} />
+          </div>
+          <input type="email" placeholder="Email (optional)" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
+
+          <div>
+            <label className="font-poppins text-white/50 text-xs uppercase tracking-widest block mb-2">Booked via</label>
+            <div className="flex gap-2">
+              {([['whatsapp', 'WhatsApp'], ['admin', 'Walk-in / Phone']] as const).map(([val, label]) => (
+                <button key={val} type="button" onClick={() => setSource(val)}
+                  className={`flex-1 rounded-xl font-poppins text-sm font-semibold border py-2.5 transition-all ${source === val ? 'bg-orange border-orange text-white' : 'bg-navy border-white/10 text-white/50 hover:text-white'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {price !== null && (
+            <div className="bg-navy border border-white/8 rounded-xl px-4 py-3 flex items-center justify-between">
+              <span className="font-poppins text-white/50 text-sm">Total</span>
+              <span className="font-qaranta text-2xl text-orange">{formatCurrency(price)}</span>
+            </div>
+          )}
+
+          {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3"><p className="font-poppins text-red-400 text-sm">{error}</p></div>}
+
+          <button type="submit" disabled={submitting}
+            className="w-full bg-orange hover:bg-orange-dark disabled:opacity-50 text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-colors">
+            {submitting ? 'Creating…' : 'Create booking'}
+          </button>
+          <p className="font-poppins text-white/30 text-xs text-center">Creates the booking, then jumps to Today — mark it paid / attended from there.</p>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 // ─────────────────────────────────────────────────────────────

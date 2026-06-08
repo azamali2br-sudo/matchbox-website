@@ -200,24 +200,26 @@ export async function POST(request: NextRequest) {
   if (!DATE_RE.test(date)) return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
   if (!ALLOWED_DURATIONS.has(Number(durationHours))) return NextResponse.json({ error: 'Invalid duration' }, { status: 400 })
 
-  // Slot must not have started yet.
+  // Slot must not have started yet (online only — admin can log past/walk-in slots).
   const slotStartMs = new Date(`${date}T${startTime}:00+05:00`).getTime()
   const nowMs = Date.now()
-  if (slotStartMs <= nowMs) {
+  if (!isAdmin && slotStartMs <= nowMs) {
     return NextResponse.json({ error: 'This slot has already started' }, { status: 400 })
   }
 
-  // Daily closure 09:00–15:00 PKT.
+  // Daily closure 09:00–15:00 PKT (online only — admin can override).
   const [sh, sm] = startTime.split(':').map(Number)
   const startMin = sh * 60 + sm
   const endMin = startMin + Math.round(Number(durationHours) * 60)
-  if (startMin < 15 * 60 && endMin > 9 * 60) {
+  if (!isAdmin && startMin < 15 * 60 && endMin > 9 * 60) {
     return NextResponse.json({ error: 'Matchbox is closed 9 AM – 3 PM' }, { status: 400 })
   }
 
-  // Hold can't extend past slot start.
+  // Online bookings get a 30-min payment hold (auto-released if unpaid). Manual
+  // admin bookings get NO hold (null) — they're arranged directly and must not
+  // auto-cancel out from under the customer.
   const defaultHoldMs = nowMs + HOLD_DURATION_MINUTES * 60 * 1000
-  const holdExpiresAt = new Date(Math.min(defaultHoldMs, slotStartMs)).toISOString()
+  const holdExpiresAt = isAdmin ? null : new Date(Math.min(defaultHoldMs, slotStartMs)).toISOString()
   const cancelToken = randomBytes(24).toString('hex')
   const courtTotal = getTotalPrice(startTime, durationHours)
 
@@ -238,7 +240,7 @@ export async function POST(request: NextRequest) {
       totalPrice: courtTotal,
       creditApplied: 0,
       paidAmount: 0,
-      holdExpiresAt,
+      holdExpiresAt: holdExpiresAt ?? undefined,
       termsAcceptedAt: new Date().toISOString(),
       cancelToken,
       source,
