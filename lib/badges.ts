@@ -21,7 +21,7 @@ export const BADGE_DEFS: Record<BadgeKey, BadgeDef> = {
   contender:  { key: 'contender',  label: 'Contender',           tone: 'bronze', desc: 'Finished #3 this month' },
   ironman:    { key: 'ironman',    label: 'Iron Man',            tone: 'cyan',   desc: 'Played the most matches this month' },
   perfect:    { key: 'perfect',    label: 'Perfect Month',       tone: 'green',  desc: 'Won every match this month' },
-  streak:     { key: 'streak',     label: 'Hot Streak',          tone: 'red',    desc: 'Longest run of consecutive wins (3+)' },
+  streak:     { key: 'streak',     label: 'Wildfire',            tone: 'red',    desc: 'Longest win streak of the month' },
   slayer:     { key: 'slayer',     label: 'Giant Slayer',        tone: 'purple', desc: 'Biggest upset — beat a much stronger team' },
   rookie:     { key: 'rookie',     label: 'Rookie of the Month', tone: 'blue',   desc: 'Best player in their debut month' },
 }

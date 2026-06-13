@@ -27,7 +27,10 @@ type Stats = {
 export type StandingPlayer = {
   id: string; name: string; rating: number
   wins: number; losses: number; matches: number
-  winRate: number | null; avgOpp: number | null; maxStreak: number
+  // maxStreak = longest run in the window (drives the month-end "Wildfire" award).
+  // currentStreak = live run as of their last match (drives the live "Hot Streak"
+  // indicator; resets to 0 on a loss).
+  winRate: number | null; avgOpp: number | null; maxStreak: number; currentStreak: number
   rank: number | null; badges: BadgeKey[]
 }
 
@@ -74,7 +77,7 @@ export function buildStandings(
     wins: s.wins, losses: s.losses, matches: s.matches,
     winRate: s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : null,
     avgOpp: s.matches > 0 ? Math.round(s.oppSum / s.matches) : null,
-    maxStreak: s.maxStreak, rank: null, badges: [],
+    maxStreak: s.maxStreak, currentStreak: s.curStreak, rank: null, badges: [],
   }))
 
   const byRating = (a: StandingPlayer, b: StandingPlayer) =>

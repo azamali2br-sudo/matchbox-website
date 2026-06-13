@@ -15,17 +15,18 @@ type Player = {
   winRate: number | null
   avgOpp: number | null
   maxStreak: number
+  currentStreak: number
   rank: number | null
   badges: BadgeKey[]
 }
 
 type MonthOpt = { value: string; label: string; closed?: boolean }
 type ApiResp = {
-  view: 'month' | 'all'
   month: string | null
   monthLabel: string
   availableMonths: MonthOpt[]
   closed?: boolean
+  isCurrentMonth?: boolean
   mainDraw: Player[]
   qualifying: Player[]
   totalMatches: number
@@ -41,29 +42,44 @@ type Match = {
 }
 
 // ── Badges ──────────────────────────────────────────────────────────────────
-// Earned-achievement badges only (placement is implied by the rank column, so
-// it's hidden on the live board). Hot Streak shows the streak length.
-const ACHIEVEMENT_ORDER = BADGE_ORDER.filter(k => !PLACEMENT_BADGES.includes(k))
-function achievementKeys(keys: BadgeKey[]): BadgeKey[] {
-  return sortBadges(keys).filter(k => !PLACEMENT_BADGES.includes(k))
+// Badges shown as captions under a name on the board: earned month achievements,
+// EXCLUDING placement (rank already shows #1/#2/#3) and 'streak'/Wildfire (a
+// month-end award revealed in the recap — its live form is the Hot Streak
+// indicator). So: Iron Man, Perfect Month, Giant Slayer, Rookie.
+const HOT_STREAK_MIN = 3
+type Tone = keyof typeof BADGE_TEXT
+const BOARD_BADGES = BADGE_ORDER.filter(k => !PLACEMENT_BADGES.includes(k) && k !== 'streak')
+function boardBadgeKeys(keys: BadgeKey[]): BadgeKey[] {
+  return sortBadges(keys).filter(k => BOARD_BADGES.includes(k))
+}
+// Does this player have anything to show in the caption? (live streak this
+// month, or any board badge)
+function hasBoardCaption(p: Player, isCurrentMonth: boolean): boolean {
+  return (isCurrentMonth && p.currentStreak >= HOT_STREAK_MIN) || boardBadgeKeys(p.badges).length > 0
 }
 
-// One subdued caption naming the player's achievement(s), written under the
-// name — readable, unlike a row of look-alike icons.
-function AchievementLine({ player }: { player: Player }) {
-  const keys = achievementKeys(player.badges)
-  if (!keys.length) return null
-  const tone = BADGE_DEFS[keys[0]].tone
-  const labels = keys.map(k => k === 'streak' ? `Hot Streak (${player.maxStreak})` : BADGE_DEFS[k].label).join(' · ')
+// One subdued caption under the name. Live "Hot Streak (N)" leads (only on the
+// in-progress month, where a current run is meaningful), then any month badges.
+function AchievementLine({ player, isCurrentMonth }: { player: Player; isCurrentMonth: boolean }) {
+  const items: { label: string; tone: Tone }[] = []
+  if (isCurrentMonth && player.currentStreak >= HOT_STREAK_MIN) {
+    items.push({ label: `Hot Streak (${player.currentStreak})`, tone: 'red' })
+  }
+  for (const k of boardBadgeKeys(player.badges)) items.push({ label: BADGE_DEFS[k].label, tone: BADGE_DEFS[k].tone })
+  if (!items.length) return null
   return (
-    <span className={`font-poppins text-[11px] font-semibold tracking-wide truncate min-w-0 ${BADGE_TEXT[tone]}`}>
-      {labels}
+    <span className={`font-poppins text-[11px] font-semibold tracking-wide truncate min-w-0 ${BADGE_TEXT[items[0].tone]}`}>
+      {items.map(i => i.label).join(' · ')}
     </span>
   )
 }
 
-// Collapsible key so a first-time visitor can learn what Iron Man / Hot Streak /
-// Giant Slayer etc. mean. Lists only the badges shown on the board.
+// Collapsible key so a first-time visitor can learn what the captions mean.
+// Lists only what shows on the board (Wildfire lives on the recap, not here).
+const LEGEND_ENTRIES: { label: string; tone: Tone; desc: string }[] = [
+  { label: 'Hot Streak', tone: 'red', desc: 'On a live 3+ win streak right now — resets if they lose. Crowned “Wildfire” at month-end for the longest streak.' },
+  ...BOARD_BADGES.map(k => ({ label: BADGE_DEFS[k].label, tone: BADGE_DEFS[k].tone, desc: BADGE_DEFS[k].desc })),
+]
 function BadgeLegend() {
   const [open, setOpen] = useState(false)
   return (
@@ -71,21 +87,18 @@ function BadgeLegend() {
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left">
         <span className="font-poppins text-xs font-semibold text-white/70">
-          What do the badges mean? <span className="text-white/30 font-normal">Iron Man, Hot Streak, Giant Slayer…</span>
+          What do the badges mean? <span className="text-white/30 font-normal">Hot Streak, Iron Man, Giant Slayer…</span>
         </span>
         <span className={`text-white/40 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
         <div className="border-t border-white/8 px-4 sm:px-5 py-4 grid sm:grid-cols-2 gap-x-6 gap-y-3">
-          {ACHIEVEMENT_ORDER.map(k => {
-            const d = BADGE_DEFS[k]
-            return (
-              <div key={k} className="flex items-baseline gap-2">
-                <span className={`font-poppins text-xs font-semibold shrink-0 ${BADGE_TEXT[d.tone]}`}>{d.label}</span>
-                <span className="font-poppins text-white/40 text-[11px] leading-snug">— {d.desc}</span>
-              </div>
-            )
-          })}
+          {LEGEND_ENTRIES.map(d => (
+            <div key={d.label} className="flex items-baseline gap-2">
+              <span className={`font-poppins text-xs font-semibold shrink-0 ${BADGE_TEXT[d.tone]}`}>{d.label}</span>
+              <span className="font-poppins text-white/40 text-[11px] leading-snug">— {d.desc}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -95,7 +108,6 @@ function BadgeLegend() {
 // ── Main component ───────────────────────────────────────────────────────────
 export default function MatchIQClient() {
   const [tab, setTab] = useState<'leaderboard' | 'matches'>('leaderboard')
-  const [view, setView] = useState<'month' | 'all'>('month')
   const [month, setMonth] = useState<string | null>(null) // null = latest
   const [data, setData] = useState<ApiResp | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,25 +116,25 @@ export default function MatchIQClient() {
   const [matchRatings, setMatchRatings] = useState<Record<string, Record<string, number>>>({})
   const [totalAllMatches, setTotalAllMatches] = useState(0)
 
+  // Monthly board only — the all-time toggle was removed (career stats live on
+  // each player's profile). The /api/.../players?view=all path is kept intact
+  // so the all-time view can be re-introduced later without a data migration.
   useEffect(() => {
     setLoading(true)
-    const qs = view === 'all' ? 'view=all' : `view=month${month ? `&month=${month}` : ''}`
-    fetch(`/api/match-iq/players?${qs}`)
+    fetch(`/api/match-iq/players?view=month${month ? `&month=${month}` : ''}`)
       .then(r => r.json())
       .then((d: ApiResp) => setData(d))
       .finally(() => setLoading(false))
-  }, [view, month])
+  }, [month])
 
-  // Recent Matches follows the selected period: all-time shows the latest
-  // across every season; a month view scopes to that month (resolved from the
-  // leaderboard response so "latest" lands on the right month).
+  // Recent Matches scopes to the month resolved by the leaderboard response.
   const resolvedMonth = data?.month ?? null
   useEffect(() => {
-    const qs = view === 'all' || !resolvedMonth ? 'limit=15' : `limit=50&month=${resolvedMonth}`
+    const qs = resolvedMonth ? `limit=50&month=${resolvedMonth}` : 'limit=15'
     fetch(`/api/match-iq/matches?${qs}`)
       .then(r => r.json())
       .then(d => { setMatches(d.matches ?? []); setMatchRatings(d.matchRatings ?? {}); setTotalAllMatches(d.total ?? 0) })
-  }, [view, resolvedMonth])
+  }, [resolvedMonth])
 
   return (
     <div className="min-h-screen bg-navy pt-28">
@@ -153,8 +165,8 @@ export default function MatchIQClient() {
         {/* Stats strip */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-10">
           {[
-            { label: data?.view === 'all' ? 'Players (all-time)' : 'Players this month', value: data?.totalPlayers || '—' },
-            { label: data?.view === 'all' ? 'Matches (all-time)' : 'Matches this month', value: data?.totalMatches || '—' },
+            { label: 'Players this month', value: data?.totalPlayers || '—' },
+            { label: 'Matches this month', value: data?.totalMatches || '—' },
             { label: 'Starting Rating', value: 60 },
           ].map(s => (
             <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl px-3 py-4 sm:p-5">
@@ -175,7 +187,7 @@ export default function MatchIQClient() {
         </div>
 
         {tab === 'leaderboard'
-          ? <Leaderboard data={data} loading={loading} view={view} setView={setView} month={month} setMonth={setMonth} />
+          ? <Leaderboard data={data} loading={loading} month={month} setMonth={setMonth} />
           : <RecentMatches matches={matches} matchRatings={matchRatings} total={totalAllMatches} />}
       </div>
     </div>
@@ -186,10 +198,9 @@ export default function MatchIQClient() {
 type SortCol = 'rating' | 'matches' | 'wins' | 'losses' | 'winRate' | 'avgOpp'
 
 function Leaderboard({
-  data, loading, view, setView, month, setMonth,
+  data, loading, month, setMonth,
 }: {
   data: ApiResp | null; loading: boolean
-  view: 'month' | 'all'; setView: (v: 'month' | 'all') => void
   month: string | null; setMonth: (m: string | null) => void
 }) {
   const [draw, setDraw] = useState<'main' | 'qualifying'>('main')
@@ -197,6 +208,7 @@ function Leaderboard({
   const [sort, setSort] = useState<{ col: SortCol; dir: 'asc' | 'desc' }>({ col: 'rating', dir: 'desc' })
 
   const activeMonth = data?.month ?? month
+  const isCurrentMonth = data?.isCurrentMonth ?? false
 
   const shown = useMemo(() => {
     const list = draw === 'main' ? (data?.mainDraw ?? []) : (data?.qualifying ?? [])
@@ -214,17 +226,9 @@ function Leaderboard({
 
   return (
     <div className="space-y-7">
-      {/* Period controls */}
+      {/* Period controls — monthly only (month picker + recap) */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
-          {(['month', 'all'] as const).map(v => (
-            <button key={v} onClick={() => setView(v)}
-              className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${view === v ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
-              {v === 'month' ? 'Monthly' : 'All-Time'}
-            </button>
-          ))}
-        </div>
-        {view === 'month' && data && (
+        {data && (
           <div className="relative">
             <select
               value={activeMonth ?? ''}
@@ -235,19 +239,19 @@ function Leaderboard({
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</span>
           </div>
         )}
-        {view === 'month' && data?.closed && (
+        {data?.closed && (
           <span className="font-poppins text-[10px] font-semibold uppercase tracking-wide text-green-400 border border-green-500/30 bg-green-500/10 rounded-full px-2.5 py-1">
             ✓ Final
           </span>
         )}
-        {view === 'month' && activeMonth && (
+        {activeMonth && (
           <Link href={`/match-iq/season/${activeMonth}`}
             className="font-poppins text-[11px] font-semibold text-orange/80 hover:text-orange border border-orange/25 hover:border-orange/50 rounded-full px-3 py-1.5">
             Season recap ↗
           </Link>
         )}
         <p className="font-poppins text-white/30 text-xs ml-auto">
-          {view === 'all' ? 'Career ratings, all matches' : data?.closed ? 'Final standings — season closed' : 'Resets to 60 each month'}
+          {data?.closed ? 'Final standings — season closed' : 'Resets to 60 each month'}
         </p>
       </div>
 
@@ -272,12 +276,12 @@ function Leaderboard({
 
       {draw === 'qualifying' && (
         <p className="font-poppins text-white/35 text-xs -mt-3">
-          Played fewer than 3 matches {view === 'all' ? '' : 'this month'} — not ranked yet (too few games to be fair). The counter shows how close each player is to the Main Draw.
+          Played fewer than 3 matches this month — not ranked yet (too few games to be fair). The counter shows how close each player is to the Main Draw.
         </p>
       )}
 
       {/* Badge guide — only relevant to the ranked Main Draw */}
-      {draw === 'main' && !search && shown.some(p => achievementKeys(p.badges).length > 0) && <BadgeLegend />}
+      {draw === 'main' && !search && shown.some(p => hasBoardCaption(p, isCurrentMonth)) && <BadgeLegend />}
 
       {/* Table */}
       {shown.length === 0 ? (
@@ -290,7 +294,7 @@ function Leaderboard({
           </p>
         </div>
       ) : (
-        <LeaderTable players={shown} provisional={draw === 'qualifying'} sort={sort} setSort={setSort} />
+        <LeaderTable players={shown} provisional={draw === 'qualifying'} isCurrentMonth={isCurrentMonth} sort={sort} setSort={setSort} />
       )}
     </div>
   )
@@ -298,9 +302,9 @@ function Leaderboard({
 
 // ── Sortable table ───────────────────────────────────────────────────────────
 function LeaderTable({
-  players, provisional, sort, setSort,
+  players, provisional, isCurrentMonth, sort, setSort,
 }: {
-  players: Player[]; provisional: boolean
+  players: Player[]; provisional: boolean; isCurrentMonth: boolean
   sort: { col: SortCol; dir: 'asc' | 'desc' }; setSort: (s: { col: SortCol; dir: 'asc' | 'desc' }) => void
 }) {
   const toggle = (col: SortCol) => setSort(sort.col === col ? { col, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
@@ -347,9 +351,9 @@ function LeaderTable({
         const borderColor = provisional ? 'border-white/5'
           : rank === 1 ? 'border-yellow-400/20' : rank && rank <= 3 ? 'border-orange/15' : 'border-white/6'
 
-        // Standard tile. Earned-achievement badges (not placement) are written
-        // under the name as a caption.
-        const hasAch = !provisional && achievementKeys(player.badges).length > 0
+        // Standard tile. Live Hot Streak + month badges are written under the
+        // name as a caption (see AchievementLine).
+        const hasAch = !provisional && hasBoardCaption(player, isCurrentMonth)
 
         return (
           <Link key={player.id} href={`/match-iq/${player.id}`}
@@ -363,7 +367,7 @@ function LeaderTable({
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
-                {hasAch && <div className="mt-1"><AchievementLine player={player} /></div>}
+                {hasAch && <div className="mt-1"><AchievementLine player={player} isCurrentMonth={isCurrentMonth} /></div>}
                 <p className="font-poppins text-white/40 text-[11px] mt-1">
                   <span>{player.matches} {player.matches === 1 ? 'match' : 'matches'}</span>
                   <span className="text-white/20 mx-1">·</span>
@@ -384,7 +388,7 @@ function LeaderTable({
               )}
               <div className="flex flex-col justify-center gap-0.5 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
-                {hasAch && <AchievementLine player={player} />}
+                {hasAch && <AchievementLine player={player} isCurrentMonth={isCurrentMonth} />}
               </div>
               <span className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
               <span className="font-poppins text-white/60 text-sm text-center font-medium">{player.matches}</span>
