@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
-import { BADGE_DEFS, BADGE_ORDER, BADGE_TILE, BADGE_TEXT, sortBadges, type BadgeKey } from '@/lib/badges'
+import { BADGE_DEFS, BADGE_ORDER, BADGE_TEXT, PLACEMENT_BADGES, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Player = {
   id: string
@@ -41,27 +41,29 @@ type Match = {
 }
 
 // ── Badges ──────────────────────────────────────────────────────────────────
-// The highest-priority badge a player holds (drives the row tint + caption).
-function topBadge(keys: BadgeKey[]) {
-  if (!keys.length) return null
-  return BADGE_DEFS[sortBadges(keys)[0]]
+// Earned-achievement badges only (placement is implied by the rank column, so
+// it's hidden on the live board). Hot Streak shows the streak length.
+const ACHIEVEMENT_ORDER = BADGE_ORDER.filter(k => !PLACEMENT_BADGES.includes(k))
+function achievementKeys(keys: BadgeKey[]): BadgeKey[] {
+  return sortBadges(keys).filter(k => !PLACEMENT_BADGES.includes(k))
 }
 
-// One subdued caption naming the player's achievement(s) — readable, unlike a
-// row of look-alike icons. Colour ties back to the row's tile tint.
-function AchievementLine({ keys }: { keys: BadgeKey[] }) {
-  const top = topBadge(keys)
-  if (!top) return null
-  const labels = sortBadges(keys).map(k => BADGE_DEFS[k].label).join(' · ')
+// One subdued caption naming the player's achievement(s), written under the
+// name — readable, unlike a row of look-alike icons.
+function AchievementLine({ player }: { player: Player }) {
+  const keys = achievementKeys(player.badges)
+  if (!keys.length) return null
+  const tone = BADGE_DEFS[keys[0]].tone
+  const labels = keys.map(k => k === 'streak' ? `Hot Streak (${player.maxStreak})` : BADGE_DEFS[k].label).join(' · ')
   return (
-    <span className={`font-poppins text-[11px] font-semibold tracking-wide truncate min-w-0 ${BADGE_TEXT[top.tone]}`}>
+    <span className={`font-poppins text-[11px] font-semibold tracking-wide truncate min-w-0 ${BADGE_TEXT[tone]}`}>
       {labels}
     </span>
   )
 }
 
-// Collapsible key so a first-time visitor can learn what Challenger / Iron Man /
-// Hot Streak etc. actually mean. Colour-coded to match the row captions.
+// Collapsible key so a first-time visitor can learn what Iron Man / Hot Streak /
+// Giant Slayer etc. mean. Lists only the badges shown on the board.
 function BadgeLegend() {
   const [open, setOpen] = useState(false)
   return (
@@ -69,13 +71,13 @@ function BadgeLegend() {
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left">
         <span className="font-poppins text-xs font-semibold text-white/70">
-          What do the badges mean? <span className="text-white/30 font-normal">Champion, Iron Man, Hot Streak…</span>
+          What do the badges mean? <span className="text-white/30 font-normal">Iron Man, Hot Streak, Giant Slayer…</span>
         </span>
         <span className={`text-white/40 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
         <div className="border-t border-white/8 px-4 sm:px-5 py-4 grid sm:grid-cols-2 gap-x-6 gap-y-3">
-          {BADGE_ORDER.map(k => {
+          {ACHIEVEMENT_ORDER.map(k => {
             const d = BADGE_DEFS[k]
             return (
               <div key={k} className="flex items-baseline gap-2">
@@ -275,7 +277,7 @@ function Leaderboard({
       )}
 
       {/* Badge guide — only relevant to the ranked Main Draw */}
-      {draw === 'main' && !search && shown.some(p => p.badges.length > 0) && <BadgeLegend />}
+      {draw === 'main' && !search && shown.some(p => achievementKeys(p.badges).length > 0) && <BadgeLegend />}
 
       {/* Table */}
       {shown.length === 0 ? (
@@ -345,14 +347,13 @@ function LeaderTable({
         const borderColor = provisional ? 'border-white/5'
           : rank === 1 ? 'border-yellow-400/20' : rank && rank <= 3 ? 'border-orange/15' : 'border-white/6'
 
-        // Badge-holders get a subtle on-theme tile tint + coloured left accent,
-        // keyed to their top badge. Everyone else stays the plain card.
-        const top = provisional ? null : topBadge(player.badges)
-        const tile = top ? `bg-gradient-to-r to-transparent border-l-2 ${BADGE_TILE[top.tone]}` : ''
+        // Standard tile. Earned-achievement badges (not placement) are written
+        // under the name as a caption.
+        const hasAch = !provisional && achievementKeys(player.badges).length > 0
 
         return (
           <Link key={player.id} href={`/match-iq/${player.id}`}
-            className={`block bg-navy-card ${tile} border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
+            className={`block bg-navy-card border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
             {/* Mobile */}
             <div className="sm:hidden flex items-start gap-3">
               {provisional ? (
@@ -362,7 +363,7 @@ function LeaderTable({
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
-                {top && <div className="mt-1"><AchievementLine keys={player.badges} /></div>}
+                {hasAch && <div className="mt-1"><AchievementLine player={player} /></div>}
                 <p className="font-poppins text-white/40 text-[11px] mt-1">
                   <span>{player.matches} {player.matches === 1 ? 'match' : 'matches'}</span>
                   <span className="text-white/20 mx-1">·</span>
@@ -383,7 +384,7 @@ function LeaderTable({
               )}
               <div className="flex flex-col justify-center gap-0.5 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
-                {top && <AchievementLine keys={player.badges} />}
+                {hasAch && <AchievementLine player={player} />}
               </div>
               <span className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
               <span className="font-poppins text-white/60 text-sm text-center font-medium">{player.matches}</span>

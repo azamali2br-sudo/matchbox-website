@@ -30,6 +30,11 @@ export const BADGE_ORDER: BadgeKey[] = [
   'champion', 'challenger', 'contender', 'ironman', 'perfect', 'streak', 'slayer', 'rookie',
 ]
 
+// Placement badges are redundant on the live leaderboard (the rank column
+// already shows #1/#2/#3), so they're hidden there — but kept on the recap and
+// trophy case as a record. The rest are earned achievements not implied by rank.
+export const PLACEMENT_BADGES: BadgeKey[] = ['champion', 'challenger', 'contender']
+
 // tone → tailwind classes (text / subtle bg / border) — used by every badge pill.
 export const BADGE_TONE: Record<BadgeDef['tone'], string> = {
   gold:   'text-yellow-300 bg-yellow-400/10 border-yellow-400/25',

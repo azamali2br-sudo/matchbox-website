@@ -102,7 +102,7 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                     return (
                       <div key={key} className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 ${BADGE_TONE[def.tone]}`}>
                         <span className="flex items-baseline gap-2 min-w-0">
-                          <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{def.label}</span>
+                          <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{key === 'streak' ? `${def.label} (${player.maxStreak})` : def.label}</span>
                           <span className="font-poppins text-[11px] opacity-60 truncate hidden sm:inline">— {def.desc}</span>
                         </span>
                         <span className="font-poppins text-sm text-white font-semibold truncate">{player.name}</span>
