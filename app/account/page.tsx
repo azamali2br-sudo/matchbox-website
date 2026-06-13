@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, formatTime, getTodayStr } from '@/lib/constants'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { BADGE_DEFS, BADGE_TONE, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Dashboard = {
   account: { id: string; name: string; phone: string; email: string | null; verified: boolean }
@@ -41,6 +42,7 @@ function bookingState(b: Dashboard['bookings'][number]): { label: string; cls: s
 export default function AccountPage() {
   const router = useRouter()
   const [data, setData] = useState<Dashboard | null>(null)
+  const [badges, setBadges] = useState<BadgeKey[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -52,6 +54,16 @@ export default function AccountPage() {
       .then(d => { if (d) setData(d) })
       .finally(() => setLoading(false))
   }, [router])
+
+  // Badges earned across all months (for the trophy row) — derived from the profile API.
+  useEffect(() => {
+    const pid = data?.matchIq?.playerId
+    if (!pid) return
+    fetch(`/api/match-iq/players/${pid}`)
+      .then(r => r.json())
+      .then(d => setBadges([...new Set((d.trophyCase ?? []).flatMap((t: { badges: BadgeKey[] }) => t.badges))] as BadgeKey[]))
+      .catch(() => {})
+  }, [data?.matchIq?.playerId])
 
   async function logout() {
     await fetch('/api/account/logout', { method: 'POST' })
@@ -108,6 +120,19 @@ export default function AccountPage() {
                   <span className="font-poppins text-white/50 text-sm">{data.matchIq.wins}W – {data.matchIq.losses}L · {data.matchIq.matches} matches</span>
                 </div>
                 <Link href={`/match-iq/${data.matchIq.playerId}`} className="font-poppins text-orange hover:text-orange-dark text-xs">View full profile →</Link>
+                {badges.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                    {sortBadges(badges).map(k => {
+                      const d = BADGE_DEFS[k]
+                      return (
+                        <span key={k} title={d.desc}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+                          <span>{d.icon}</span>{d.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </>
             ) : (
               <>

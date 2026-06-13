@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
+import { BADGE_DEFS, BADGE_TONE, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Player = { id: string; name: string; rating: number; wins: number; losses: number; created_at: string }
 type RatingPoint = { rating: number; created_at: string }
@@ -15,12 +16,16 @@ type Match = {
   set_scores: SetScore[] | null
   p1: MatchPlayer; p2: MatchPlayer; p3: MatchPlayer; p4: MatchPlayer
 }
+type TrophyMonth = { month: string; monthLabel: string; rank: number | null; badges: BadgeKey[] }
+type AllTime = { rank: number | null; avgOpp: number | null; matches: number }
 
 export default function PlayerPage({ params }: { params: Promise<{ playerId: string }> }) {
   const { playerId } = use(params)
   const [player, setPlayer] = useState<Player | null>(null)
   const [history, setHistory] = useState<RatingPoint[]>([])
   const [matches, setMatches] = useState<Match[]>([])
+  const [trophyCase, setTrophyCase] = useState<TrophyMonth[]>([])
+  const [allTime, setAllTime] = useState<AllTime | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -32,6 +37,8 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
         setPlayer(data.player)
         setHistory(data.ratingHistory)
         setMatches(data.matches)
+        setTrophyCase(data.trophyCase ?? [])
+        setAllTime(data.allTime ?? null)
       })
       .finally(() => setLoading(false))
   }, [playerId])
@@ -75,6 +82,13 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
               <p className="font-poppins text-white/40 text-xs sm:text-sm mt-2">
                 Member since {new Date(player.created_at).toLocaleDateString('en-PK', { month: 'long', year: 'numeric' })}
               </p>
+              {allTime && (allTime.rank || allTime.avgOpp !== null) && (
+                <p className="font-poppins text-white/30 text-xs mt-1.5">
+                  {allTime.rank && <>All-time rank <span className="text-white/60 font-semibold">#{allTime.rank}</span></>}
+                  {allTime.rank && allTime.avgOpp !== null && <span className="text-white/20"> · </span>}
+                  {allTime.avgOpp !== null && <>Avg opponent <span className="text-white/60 font-semibold">{allTime.avgOpp}</span></>}
+                </p>
+              )}
             </div>
             <div className="text-right shrink-0">
               <div className="font-qaranta text-4xl sm:text-5xl md:text-6xl text-orange">{Math.round(player.rating)}</div>
@@ -96,6 +110,31 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
             ))}
           </div>
         </div>
+
+        {/* Trophy case */}
+        {trophyCase.length > 0 && (
+          <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8 mb-6">
+            <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-5">🏆 Trophy Case</h2>
+            <div className="space-y-3.5">
+              {trophyCase.map(t => (
+                <div key={t.month} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <span className="font-poppins text-white/45 text-xs sm:w-28 shrink-0">{t.monthLabel}</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {sortBadges(t.badges).map(k => {
+                      const d = BADGE_DEFS[k]
+                      return (
+                        <span key={k} title={d.desc}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+                          <span>{d.icon}</span>{d.label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Rating graph */}
         {history.length > 1 && (

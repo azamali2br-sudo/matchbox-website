@@ -2,17 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PROVISIONAL_MATCHES } from "@/lib/elo";
+import { BADGE_DEFS, type BadgeKey } from "@/lib/badges";
 
 type Player = {
   id: string;
   name: string;
   rating: number;
-  wins: number;
-  losses: number;
-  lastPlayedAt: string | null;
-  lifetimeMatches: number;
-  rankChange: number | null;
+  matches: number;
+  badges: BadgeKey[];
 };
 
 export default function MatchIQTeaser() {
@@ -20,15 +17,10 @@ export default function MatchIQTeaser() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mirror the main leaderboard's default: rating computed from the last
-    // 30 days of matches, top 5 with 3+ matches in that window.
-    fetch('/api/match-iq/players?window=30d')
+    // This month's Main Draw — top 5 players (3+ matches this month).
+    fetch('/api/match-iq/players?view=month')
       .then(r => r.json())
-      .then(d => {
-        const all: Player[] = d.players ?? [];
-        const top = all.filter(p => p.lifetimeMatches >= PROVISIONAL_MATCHES).slice(0, 5);
-        setPlayers(top);
-      })
+      .then(d => setPlayers((d.mainDraw ?? []).slice(0, 5)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -41,7 +33,7 @@ export default function MatchIQTeaser() {
             <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2 mb-8">
               <span className="w-2 h-2 rounded-full bg-orange" />
               <span className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest">
-                Coming Soon
+                Live Now
               </span>
             </div>
 
@@ -119,43 +111,33 @@ export default function MatchIQTeaser() {
                   <span className="font-poppins text-white/30 text-sm">No players yet — be the first.</span>
                 </div>
               ) : (
-                players.map((player, i) => {
-                  const matches = (player.wins ?? 0) + (player.losses ?? 0);
-                  return (
-                    <div
-                      key={player.id}
-                      className={`grid grid-cols-12 gap-2 items-center px-4 sm:px-6 py-4 ${
-                        i < players.length - 1 ? "border-b border-white/5" : ""
-                      } ${i === 0 ? "bg-orange/5" : ""}`}
-                    >
-                      <span
-                        className={`col-span-1 font-qaranta text-lg ${
-                          i === 0 ? "text-orange" : "text-white/30"
-                        }`}
-                      >
-                        {i + 1}
-                      </span>
-                      <div className="col-span-5 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-navy-dark border border-white/10 flex items-center justify-center flex-shrink-0">
-                          <span className="font-qaranta text-xs text-white/60">
-                            {player.name.charAt(0)}
-                          </span>
-                        </div>
-                        <span className="font-poppins text-sm text-white font-medium truncate">
-                          {player.name}
-                        </span>
+                players.map((player, i) => (
+                  <div
+                    key={player.id}
+                    className={`grid grid-cols-12 gap-2 items-center px-4 sm:px-6 py-4 ${
+                      i < players.length - 1 ? "border-b border-white/5" : ""
+                    } ${i === 0 ? "bg-orange/5" : ""}`}
+                  >
+                    <span className={`col-span-1 font-qaranta text-lg ${i === 0 ? "text-orange" : "text-white/30"}`}>
+                      {i + 1}
+                    </span>
+                    <div className="col-span-5 flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-navy-dark border border-white/10 flex items-center justify-center flex-shrink-0">
+                        <span className="font-qaranta text-xs text-white/60">{player.name.charAt(0)}</span>
                       </div>
-                      <span className="col-span-3 font-poppins text-xs text-white/40 text-center">
-                        {matches}
-                      </span>
-                      <div className="col-span-3 flex items-center justify-end">
-                        <span className="font-qaranta text-lg text-white">
-                          {player.rating?.toFixed(1)}
+                      <span className="font-poppins text-sm text-white font-medium truncate">{player.name}</span>
+                      {player.badges?.[0] && (
+                        <span title={BADGE_DEFS[player.badges[0]].label} className="text-xs shrink-0 leading-none">
+                          {BADGE_DEFS[player.badges[0]].icon}
                         </span>
-                      </div>
+                      )}
                     </div>
-                  );
-                })
+                    <span className="col-span-3 font-poppins text-xs text-white/40 text-center">{player.matches}</span>
+                    <div className="col-span-3 flex items-center justify-end">
+                      <span className="font-qaranta text-lg text-white">{player.rating}</span>
+                    </div>
+                  </div>
+                ))
               )}
 
               {/* Footer note */}

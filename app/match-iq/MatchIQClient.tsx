@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
-import { PROVISIONAL_MATCHES } from '@/lib/elo'
+import { BADGE_DEFS, BADGE_TONE, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Player = {
   id: string
@@ -11,63 +11,88 @@ type Player = {
   rating: number
   wins: number
   losses: number
-  lastPlayedAt: string | null
-  lifetimeMatches: number
-  rankChange: number | null
+  matches: number
+  winRate: number | null
+  avgOpp: number | null
+  maxStreak: number
+  rank: number | null
+  badges: BadgeKey[]
 }
 
-type LeaderboardWindow = '7d' | '30d' | 'all'
+type MonthOpt = { value: string; label: string }
+type ApiResp = {
+  view: 'month' | 'all'
+  month: string | null
+  monthLabel: string
+  availableMonths: MonthOpt[]
+  mainDraw: Player[]
+  qualifying: Player[]
+  totalMatches: number
+  totalPlayers: number
+}
 
 type MatchPlayer = { id: string; name: string; rating: number }
 type SetScore = { t1: number; t2: number }
 type Match = {
-  id: string
-  played_on: string
-  court: string | null
-  start_time: string | null
-  team1_score: number
-  team2_score: number
-  set_scores: SetScore[] | null
-  p1: MatchPlayer
-  p2: MatchPlayer
-  p3: MatchPlayer
-  p4: MatchPlayer
+  id: string; played_on: string; court: string | null; start_time: string | null
+  team1_score: number; team2_score: number; set_scores: SetScore[] | null
+  p1: MatchPlayer; p2: MatchPlayer; p3: MatchPlayer; p4: MatchPlayer
 }
 
+// ── Badges ──────────────────────────────────────────────────────────────────
+function BadgeChips({ keys, full = false }: { keys: BadgeKey[]; full?: boolean }) {
+  if (!keys.length) return null
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {sortBadges(keys).map(k => {
+        const d = BADGE_DEFS[k]
+        return full ? (
+          <span key={k} title={d.desc}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+            <span>{d.icon}</span>{d.label}
+          </span>
+        ) : (
+          <span key={k} title={`${d.label} — ${d.desc}`}
+            className={`inline-flex items-center justify-center w-5 h-5 rounded-md border text-[11px] leading-none ${BADGE_TONE[d.tone]}`}>
+            {d.icon}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
 export default function MatchIQClient() {
   const [tab, setTab] = useState<'leaderboard' | 'matches'>('leaderboard')
-  const [window, setWindow] = useState<LeaderboardWindow>('30d')
-  const [players, setPlayers] = useState<Player[]>([])
-  const [matches, setMatches] = useState<Match[]>([])
-  const [matchRatings, setMatchRatings] = useState<Record<string, Record<string, number>>>({})
-  const [totalMatches, setTotalMatches] = useState(0)
+  const [view, setView] = useState<'month' | 'all'>('month')
+  const [month, setMonth] = useState<string | null>(null) // null = latest
+  const [data, setData] = useState<ApiResp | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Refetch leaderboard whenever the window changes — ratings are recomputed
-  // server-side from scratch using only matches inside the window.
+  const [matches, setMatches] = useState<Match[]>([])
+  const [matchRatings, setMatchRatings] = useState<Record<string, Record<string, number>>>({})
+  const [totalAllMatches, setTotalAllMatches] = useState(0)
+
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/match-iq/players?window=${window}`)
+    const qs = view === 'all' ? 'view=all' : `view=month${month ? `&month=${month}` : ''}`
+    fetch(`/api/match-iq/players?${qs}`)
       .then(r => r.json())
-      .then(d => setPlayers(d.players ?? []))
+      .then((d: ApiResp) => setData(d))
       .finally(() => setLoading(false))
-  }, [window])
+  }, [view, month])
 
-  // Matches tab data — fetched once
   useEffect(() => {
     fetch('/api/match-iq/matches?limit=15')
       .then(r => r.json())
-      .then(d => {
-        setMatches(d.matches ?? [])
-        setMatchRatings(d.matchRatings ?? {})
-        setTotalMatches(d.total ?? 0)
-      })
+      .then(d => { setMatches(d.matches ?? []); setMatchRatings(d.matchRatings ?? {}); setTotalAllMatches(d.total ?? 0) })
   }, [])
 
   return (
     <div className="min-h-screen bg-navy pt-28">
-      {/* Hero */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+        {/* Hero */}
         <div className="flex items-center gap-3 mb-6">
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
@@ -75,33 +100,31 @@ export default function MatchIQClient() {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
           <div>
             <h1 className="font-qaranta text-5xl sm:text-6xl md:text-7xl text-white uppercase leading-none">
               Match<span className="text-orange">IQ</span>
             </h1>
             <p className="font-poppins text-white/50 text-sm mt-3 max-w-md">
-              Pakistan&apos;s first padel Elo rating system. Everyone starts at 60 — where you end up is up to you.
+              Pakistan&apos;s first padel Elo rating system. Every month resets to 60 — climb the board and earn your badges.
             </p>
           </div>
-          <Link
-            href="/match-iq/submit"
-            className="inline-flex items-center gap-2 bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-6 py-3.5 rounded-full transition-all duration-200 hover:shadow-xl hover:shadow-orange/30 shrink-0"
-          >
+          <Link href="/match-iq/submit"
+            className="inline-flex items-center gap-2 bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-6 py-3.5 rounded-full transition-all duration-200 hover:shadow-xl hover:shadow-orange/30 shrink-0">
             + Submit Match
           </Link>
         </div>
 
         {/* Stats strip */}
-        <div className="grid grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-10">
           {[
-            { label: 'Players', value: players.length || '—' },
-            { label: 'Matches Played', value: totalMatches || '—' },
+            { label: data?.view === 'all' ? 'Players (all-time)' : 'Players this month', value: data?.totalPlayers || '—' },
+            { label: data?.view === 'all' ? 'Matches (all-time)' : 'Matches this month', value: data?.totalMatches || '—' },
             { label: 'Starting Rating', value: 60 },
           ].map(s => (
-            <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl p-5">
-              <div className="font-qaranta text-3xl text-orange">{s.value}</div>
-              <div className="font-poppins text-white/40 text-xs mt-1">{s.label}</div>
+            <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl px-3 py-4 sm:p-5">
+              <div className="font-qaranta text-2xl sm:text-3xl text-orange leading-none">{s.value}</div>
+              <div className="font-poppins text-white/40 text-[11px] sm:text-xs mt-1.5">{s.label}</div>
             </div>
           ))}
         </div>
@@ -109,234 +132,267 @@ export default function MatchIQClient() {
         {/* Tabs */}
         <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-8">
           {(['leaderboard', 'matches'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`font-poppins text-xs font-semibold px-5 py-2.5 rounded-lg transition-all capitalize ${
-                tab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'
-              }`}
-            >
+            <button key={t} onClick={() => setTab(t)}
+              className={`font-poppins text-xs font-semibold px-5 py-2.5 rounded-lg transition-all ${tab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
               {t === 'leaderboard' ? 'Leaderboard' : 'Recent Matches'}
             </button>
           ))}
         </div>
 
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="h-16 bg-navy-card rounded-2xl animate-pulse" />
-            ))}
-          </div>
-        ) : tab === 'leaderboard' ? (
-          <Leaderboard players={players} window={window} setWindow={setWindow} />
-        ) : (
-          <RecentMatches matches={matches} matchRatings={matchRatings} />
-        )}
+        {tab === 'leaderboard'
+          ? <Leaderboard data={data} loading={loading} view={view} setView={setView} month={month} setMonth={setMonth} />
+          : <RecentMatches matches={matches} matchRatings={matchRatings} total={totalAllMatches} />}
       </div>
     </div>
   )
 }
 
+// ── Leaderboard ──────────────────────────────────────────────────────────────
+type SortCol = 'rating' | 'matches' | 'wins' | 'losses' | 'winRate' | 'avgOpp'
+
 function Leaderboard({
-  players,
-  window,
-  setWindow,
+  data, loading, view, setView, month, setMonth,
 }: {
-  players: Player[]
-  window: LeaderboardWindow
-  setWindow: (w: LeaderboardWindow) => void
+  data: ApiResp | null; loading: boolean
+  view: 'month' | 'all'; setView: (v: 'month' | 'all') => void
+  month: string | null; setMonth: (m: string | null) => void
 }) {
-  if (players.length === 0) {
-    return (
-      <div className="text-center py-24">
-        <p className="font-qaranta text-4xl text-white/20 uppercase mb-3">No Players Yet</p>
-        <p className="font-poppins text-white/30 text-sm">Submit your first match to appear on the leaderboard.</p>
-        <Link href="/match-iq/submit" className="inline-block mt-6 text-orange font-poppins text-sm font-semibold hover:underline">
-          Submit a match →
-        </Link>
-      </div>
-    )
+  const [draw, setDraw] = useState<'main' | 'qualifying'>('main')
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<{ col: SortCol; dir: 'asc' | 'desc' }>({ col: 'rating', dir: 'desc' })
+
+  const activeMonth = data?.month ?? month
+
+  const shown = useMemo(() => {
+    const list = draw === 'main' ? (data?.mainDraw ?? []) : (data?.qualifying ?? [])
+    const q = search.trim().toLowerCase()
+    const filtered = q ? list.filter(p => p.name.toLowerCase().includes(q)) : list
+    const { col, dir } = sort
+    const m = dir === 'desc' ? -1 : 1
+    const val = (p: Player) => col === 'winRate' ? (p.winRate ?? -1) : col === 'avgOpp' ? (p.avgOpp ?? -1) : p[col]
+    return [...filtered].sort((a, b) => (val(a) - val(b)) * m || a.name.localeCompare(b.name))
+  }, [data, draw, search, sort])
+
+  if (loading) {
+    return <div className="space-y-3">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-navy-card rounded-2xl animate-pulse" />)}</div>
   }
 
-  // Established vs provisional is decided by LIFETIME match count, not window.
-  // A veteran with 50 matches who only played once this week is still ranked.
-  // The "New Players" section is genuinely for first-timers (lifetime < 3).
-  const established = players.filter(p => p.lifetimeMatches >= PROVISIONAL_MATCHES)
-  const provisional = players.filter(p => p.lifetimeMatches < PROVISIONAL_MATCHES)
-
-  const windowLabel = window === '7d' ? 'last 7 days' : window === '30d' ? 'last 30 days' : 'all time'
+  const podium = draw === 'main' ? (data?.mainDraw ?? []).slice(0, 3) : []
 
   return (
-    <div className="space-y-8">
-      {/* Window selector */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="space-y-7">
+      {/* Period controls */}
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
-          {(['7d', '30d', 'all'] as const).map(w => (
-            <button
-              key={w}
-              onClick={() => setWindow(w)}
-              className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${
-                window === w ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {w === '7d' ? 'Last 7 days' : w === '30d' ? 'Last 30 days' : 'All time'}
+          {(['month', 'all'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${view === v ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
+              {v === 'month' ? 'Monthly' : 'All-Time'}
             </button>
           ))}
         </div>
-        <p className="font-poppins text-white/30 text-xs">
-          {window === 'all'
-            ? `${established.length} ranked`
-            : `Rating from matches in the ${windowLabel}`}
+        {view === 'month' && data && (
+          <div className="relative">
+            <select
+              value={activeMonth ?? ''}
+              onChange={e => setMonth(e.target.value)}
+              className="appearance-none font-poppins text-xs font-semibold text-white bg-navy-card border border-white/8 rounded-xl pl-4 pr-9 py-2.5 cursor-pointer hover:border-white/20 focus:border-orange/40 outline-none">
+              {data.availableMonths.map(m => <option key={m.value} value={m.value} className="bg-navy">{m.label}</option>)}
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</span>
+          </div>
+        )}
+        <p className="font-poppins text-white/30 text-xs ml-auto">
+          {view === 'all' ? 'Career ratings, all matches' : 'Resets to 60 each month'}
         </p>
       </div>
 
-      {/* Ranked players */}
-      {established.length === 0 ? (
-        <div className="text-center py-12 bg-navy-card border border-white/8 rounded-2xl">
-          <p className="font-poppins text-white/40 text-sm mb-2">
-            No players with {PROVISIONAL_MATCHES}+ matches in the {windowLabel}.
-          </p>
-          {window !== 'all' && (
-            <button
-              onClick={() => setWindow('all')}
-              className="font-poppins text-orange text-sm font-semibold hover:underline"
-            >
-              See all time leaderboard →
-            </button>
-          )}
+      {/* Podium */}
+      {podium.length > 0 && !search && <Podium top={podium} period={data?.monthLabel ?? ''} isAllTime={view === 'all'} />}
+
+      {/* Draw toggle + search */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
+          <button onClick={() => setDraw('main')}
+            className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${draw === 'main' ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
+            Main Draw <span className="opacity-60">{data?.mainDraw.length ?? 0}</span>
+          </button>
+          <button onClick={() => setDraw('qualifying')}
+            className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${draw === 'qualifying' ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
+            Qualifying <span className="opacity-60">{data?.qualifying.length ?? 0}</span>
+          </button>
         </div>
-      ) : (
-        <PlayerList players={established} />
+        <div className="relative sm:ml-auto sm:w-56">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player…"
+            className="w-full font-poppins text-sm text-white placeholder-white/30 bg-navy-card border border-white/8 rounded-xl pl-9 pr-3 py-2.5 outline-none focus:border-orange/40" />
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">⌕</span>
+        </div>
+      </div>
+
+      {draw === 'qualifying' && (
+        <p className="font-poppins text-white/35 text-xs -mt-3">
+          Played fewer than 3 matches {view === 'all' ? '' : 'this month'} — keep playing to join the Main Draw.
+        </p>
       )}
 
-      {/* New players — lifetime matches < PROVISIONAL_MATCHES, always shown
-          regardless of window. Veterans never end up here. */}
-      {provisional.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <h3 className="font-qaranta text-xl text-white uppercase">New Players</h3>
-            <span className="font-poppins text-white/30 text-xs">
-              Calibrating · need {PROVISIONAL_MATCHES}+ lifetime matches to rank
-            </span>
+      {/* Table */}
+      {shown.length === 0 ? (
+        <div className="text-center py-16 bg-navy-card border border-white/8 rounded-2xl">
+          <p className="font-qaranta text-3xl text-white/20 uppercase mb-2">
+            {search ? 'No match' : draw === 'main' ? 'No ranked players yet' : 'Nobody here'}
+          </p>
+          <p className="font-poppins text-white/30 text-sm">
+            {search ? 'Try a different name.' : draw === 'main' ? 'Play 3+ matches to make the Main Draw.' : 'Everyone has made the Main Draw.'}
+          </p>
+        </div>
+      ) : (
+        <LeaderTable players={shown} provisional={draw === 'qualifying'} sort={sort} setSort={setSort} />
+      )}
+    </div>
+  )
+}
+
+// ── Podium (top 3) ───────────────────────────────────────────────────────────
+function Podium({ top, period, isAllTime }: { top: Player[]; period: string; isAllTime: boolean }) {
+  const [champ, second, third] = top
+  const titles = isAllTime
+    ? ['All-Time #1', 'All-Time #2', 'All-Time #3']
+    : ['Champion', 'Challenger', 'Contender']
+
+  return (
+    <div className="space-y-3">
+      <p className="font-poppins text-white/30 text-[11px] uppercase tracking-[0.2em]">{period} · Podium</p>
+      {/* Champion feature card */}
+      <Link href={`/match-iq/${champ.id}`}
+        className="block rounded-3xl border border-yellow-400/25 bg-gradient-to-br from-yellow-400/10 via-navy-card to-navy-card p-5 sm:p-6 hover:border-yellow-400/45 transition-colors group">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xl">🏆</span>
+              <span className="font-poppins text-yellow-300 text-[11px] font-bold uppercase tracking-[0.18em]">{titles[0]}</span>
+            </div>
+            <p className="font-qaranta text-2xl sm:text-3xl text-white uppercase leading-tight break-words group-hover:text-orange transition-colors">{champ.name}</p>
+            <p className="font-poppins text-white/45 text-xs mt-1.5">
+              {champ.wins}W · {champ.losses}L · {champ.matches} matches
+              {champ.avgOpp !== null && <> · avg opp {champ.avgOpp}</>}
+            </p>
+            <div className="mt-2.5"><BadgeChips keys={champ.badges} full /></div>
           </div>
-          <PlayerList players={provisional} provisional />
+          <div className="text-right shrink-0">
+            <div className="font-qaranta text-5xl sm:text-6xl text-orange leading-none">{champ.rating}</div>
+            <div className="font-poppins text-white/35 text-[10px] uppercase tracking-widest mt-1">Rating</div>
+          </div>
+        </div>
+      </Link>
+      {/* Runner-ups */}
+      {(second || third) && (
+        <div className="grid grid-cols-2 gap-3">
+          {[{ p: second, t: titles[1], ring: 'border-slate-300/25', medal: '🥈' }, { p: third, t: titles[2], ring: 'border-amber-500/25', medal: '🥉' }]
+            .filter(x => x.p).map(({ p, t, ring, medal }) => (
+              <Link key={p.id} href={`/match-iq/${p.id}`}
+                className={`block rounded-2xl border ${ring} bg-navy-card p-4 hover:border-white/25 transition-colors group min-w-0`}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-sm">{medal}</span>
+                  <span className="font-poppins text-white/45 text-[10px] font-bold uppercase tracking-widest truncate">{t}</span>
+                </div>
+                <div className="flex items-end justify-between gap-2">
+                  <p className="font-poppins text-white text-sm font-semibold break-words leading-snug min-w-0 group-hover:text-orange transition-colors">{p.name}</p>
+                  <span className="font-qaranta text-2xl text-orange shrink-0 leading-none">{p.rating}</span>
+                </div>
+                <div className="mt-1.5"><BadgeChips keys={p.badges} /></div>
+              </Link>
+            ))}
         </div>
       )}
     </div>
   )
 }
 
-function RankArrow({ change }: { change: number | null }) {
-  if (change === null) {
-    // Wasn't ranked in the previous period — show a subtle "new" marker
-    return <span className="font-poppins text-[9px] text-orange/60 mt-0.5 leading-none">NEW</span>
-  }
-  if (change === 0) {
-    return <span className="font-poppins text-[10px] text-white/25 mt-0.5 leading-none">—</span>
-  }
-  const up = change > 0
-  return (
-    <span className={`font-poppins text-[10px] mt-0.5 leading-none flex items-center gap-0.5 ${up ? 'text-green-400' : 'text-red-400/80'}`}>
-      <span className="text-[8px]">{up ? '▲' : '▼'}</span>
-      {Math.abs(change)}
-    </span>
-  )
-}
+// ── Sortable table ───────────────────────────────────────────────────────────
+function LeaderTable({
+  players, provisional, sort, setSort,
+}: {
+  players: Player[]; provisional: boolean
+  sort: { col: SortCol; dir: 'asc' | 'desc' }; setSort: (s: { col: SortCol; dir: 'asc' | 'desc' }) => void
+}) {
+  const toggle = (col: SortCol) => setSort(sort.col === col ? { col, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
+  const caret = (col: SortCol) => sort.col === col ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''
+  const cols: { key: SortCol; label: string; align: string }[] = [
+    { key: 'rating', label: 'Rating', align: 'text-right' },
+    { key: 'matches', label: 'M', align: 'text-center' },
+    { key: 'wins', label: 'W/L', align: 'text-center' },
+    { key: 'winRate', label: 'Win%', align: 'text-right' },
+    { key: 'avgOpp', label: 'Avg Opp', align: 'text-right' },
+  ]
 
-function PlayerList({ players, provisional = false }: { players: Player[]; provisional?: boolean }) {
   return (
     <div className="space-y-2">
-      {/* Header row — hidden on mobile, shown sm+ */}
-      <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_4rem_5rem_4rem] gap-4 px-5 pb-2">
-        <div />
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Rating</span>
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-center">Matches</span>
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-center">W / L</span>
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider text-right">Win%</span>
+      {/* Mobile sort control */}
+      <div className="sm:hidden flex items-center gap-2 mb-1">
+        <span className="font-poppins text-white/30 text-[11px] uppercase tracking-wider">Sort</span>
+        <div className="flex flex-wrap gap-1">
+          {cols.map(c => (
+            <button key={c.key} onClick={() => toggle(c.key)}
+              className={`font-poppins text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${sort.col === c.key ? 'border-orange/40 text-orange bg-orange/10' : 'border-white/8 text-white/40'}`}>
+              {c.label}{caret(c.key)}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {players.map((player, i) => {
-        const rank = i + 1
-        const rankColor = provisional
-          ? 'text-white/30'
-          : rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/25'
-        const borderColor = provisional
-          ? 'border-white/5'
-          : rank === 1 ? 'border-yellow-400/20' : rank <= 3 ? 'border-orange/15' : 'border-white/6'
-        const matchesPlayed = player.wins + player.losses
-        const winRate = matchesPlayed > 0 ? Math.round((player.wins / matchesPlayed) * 100) : null
+      {/* Desktop header */}
+      <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 px-5 pb-1">
+        <div />
+        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
+        {cols.map(c => (
+          <button key={c.key} onClick={() => toggle(c.key)}
+            className={`font-poppins text-xs uppercase tracking-wider hover:text-white/70 transition-colors ${c.align} ${sort.col === c.key ? 'text-orange' : 'text-white/30'}`}>
+            {c.label}{caret(c.key)}
+          </button>
+        ))}
+      </div>
+
+      {players.map(player => {
+        const rank = player.rank
+        const rankColor = provisional ? 'text-white/30'
+          : rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/30'
+        const borderColor = provisional ? 'border-white/5'
+          : rank === 1 ? 'border-yellow-400/20' : rank && rank <= 3 ? 'border-orange/15' : 'border-white/6'
 
         return (
-          <Link
-            key={player.id}
-            href={`/match-iq/${player.id}`}
-            className={`block bg-navy-card border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}
-          >
-            {/* Mobile layout: stacked */}
-            <div className="sm:hidden flex items-center gap-3">
-              <div className="w-10 shrink-0 flex flex-col items-center">
-                <span className={`font-qaranta text-lg leading-none ${rankColor}`}>
-                  {provisional ? '—' : rank}
-                </span>
-                {!provisional && <RankArrow change={player.rankChange} />}
-              </div>
+          <Link key={player.id} href={`/match-iq/${player.id}`}
+            className={`block bg-navy-card border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
+            {/* Mobile */}
+            <div className="sm:hidden flex items-start gap-3">
+              <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center mt-0.5 ${rankColor}`}>{rank ?? '—'}</span>
               <div className="flex-1 min-w-0">
-                <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">
-                  {player.name}
-                  {provisional && (
-                    <span className="ml-2 font-poppins text-[10px] uppercase tracking-wider text-orange/70 bg-orange/10 border border-orange/20 rounded-full px-2 py-0.5">
-                      Calibrating
-                    </span>
-                  )}
-                </p>
-                <p className="font-poppins text-white/40 text-[11px] mt-0.5">
-                  <span>{matchesPlayed} {matchesPlayed === 1 ? 'match' : 'matches'}</span>
+                <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
+                {player.badges.length > 0 && <div className="mt-1"><BadgeChips keys={player.badges} /></div>}
+                <p className="font-poppins text-white/40 text-[11px] mt-1">
+                  <span>{player.matches} {player.matches === 1 ? 'match' : 'matches'}</span>
                   <span className="text-white/20 mx-1">·</span>
-                  <span className="text-green-400">{player.wins}W</span>
-                  <span className="text-white/20 mx-1">·</span>
-                  <span className="text-red-400/70">{player.losses}L</span>
-                  {winRate !== null && (
-                    <>
-                      <span className="text-white/20 mx-1">·</span>
-                      <span>{winRate}%</span>
-                    </>
-                  )}
+                  <span className="text-green-400">{player.wins}W</span> <span className="text-red-400/70">{player.losses}L</span>
+                  {player.winRate !== null && <><span className="text-white/20 mx-1">·</span><span>{player.winRate}%</span></>}
+                  {player.avgOpp !== null && <><span className="text-white/20 mx-1">·</span><span>opp {player.avgOpp}</span></>}
                 </p>
               </div>
-              <p className={`font-qaranta text-2xl shrink-0 ${provisional ? 'text-white/50' : 'text-orange'}`}>
-                {Math.round(player.rating)}
-              </p>
+              <span className={`font-qaranta text-2xl shrink-0 leading-none ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
             </div>
 
-            {/* Desktop layout: grid */}
-            <div className="hidden sm:grid grid-cols-[2rem_1fr_5rem_4rem_5rem_4rem] gap-4 items-center">
-              <div className="flex flex-col items-center">
-                <span className={`font-qaranta text-lg leading-none ${rankColor}`}>{provisional ? '—' : rank}</span>
-                {!provisional && <RankArrow change={player.rankChange} />}
-              </div>
+            {/* Desktop */}
+            <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 items-center">
+              <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{rank ?? '—'}</span>
               <div className="flex items-center gap-2 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
-                {provisional && (
-                  <span className="font-poppins text-[10px] uppercase tracking-wider text-orange/70 bg-orange/10 border border-orange/20 rounded-full px-2 py-0.5 shrink-0">
-                    Calibrating
-                  </span>
-                )}
+                <BadgeChips keys={player.badges} />
               </div>
-              <p className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>
-                {Math.round(player.rating)}
-              </p>
-              <p className="font-poppins text-white/60 text-sm text-center font-medium">
-                {matchesPlayed}
-              </p>
-              <p className="font-poppins text-white/50 text-xs text-center">
-                <span className="text-green-400">{player.wins}</span>
-                <span className="text-white/20 mx-1">/</span>
-                <span className="text-red-400/70">{player.losses}</span>
-              </p>
-              <p className="font-poppins text-white/40 text-xs text-right">
-                {winRate !== null ? `${winRate}%` : '—'}
-              </p>
+              <span className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
+              <span className="font-poppins text-white/60 text-sm text-center font-medium">{player.matches}</span>
+              <span className="font-poppins text-xs text-center">
+                <span className="text-green-400">{player.wins}</span><span className="text-white/20 mx-1">/</span><span className="text-red-400/70">{player.losses}</span>
+              </span>
+              <span className="font-poppins text-white/45 text-xs text-right">{player.winRate !== null ? `${player.winRate}%` : '—'}</span>
+              <span className="font-poppins text-white/45 text-xs text-right">{player.avgOpp ?? '—'}</span>
             </div>
           </Link>
         )
@@ -345,7 +401,8 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
   )
 }
 
-function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatings: Record<string, Record<string, number>> }) {
+// ── Recent matches (unchanged) ───────────────────────────────────────────────
+function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatings: Record<string, Record<string, number>>; total: number }) {
   if (matches.length === 0) {
     return (
       <div className="text-center py-24">
@@ -354,103 +411,55 @@ function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatin
       </div>
     )
   }
-
   return (
     <div className="space-y-3">
       {matches.map(match => {
         const team1Won = match.team1_score > match.team2_score
         const ratings = matchRatings[match.id] ?? {}
-
         const r1 = Math.round(ratings[match.p1.id] ?? match.p1.rating)
         const r2 = Math.round(ratings[match.p2.id] ?? match.p2.rating)
         const r3 = Math.round(ratings[match.p3.id] ?? match.p3.rating)
         const r4 = Math.round(ratings[match.p4.id] ?? match.p4.rating)
-
-        const avg1 = Math.round((r1 + r2) / 2)
-        const avg2 = Math.round((r3 + r4) / 2)
+        const avg1 = Math.round((r1 + r2) / 2), avg2 = Math.round((r3 + r4) / 2)
         const ratingGap = Math.abs(avg1 - avg2)
         const isUpset = (team1Won && avg1 < avg2) || (!team1Won && avg2 < avg1)
-
         const winnerBorder = team1Won ? 'border-l-orange/40' : 'border-r-orange/40'
-
         return (
           <div key={match.id} className={`bg-navy-card border border-white/6 rounded-2xl overflow-hidden hover:border-white/15 transition-colors border-l-2 border-r-2 ${winnerBorder}`}>
-
-            {/* Main content */}
-            <div className="flex items-center gap-3 px-5 py-5">
-
-              {/* Team 1 — right aligned */}
+            <div className="flex items-center gap-3 px-4 sm:px-5 py-5">
               <div className="flex-1 text-right space-y-2.5">
                 {[{ p: match.p1, r: r1 }, { p: match.p2, r: r2 }].map(({ p, r }) => (
                   <div key={p.id} className="flex items-center justify-end gap-2">
-                    <Link
-                      href={`/match-iq/${p.id}`}
-                      className={`font-poppins text-sm font-medium hover:underline transition-colors leading-tight ${team1Won ? 'text-white' : 'text-white/40'}`}
-                    >
-                      {p.name}
-                    </Link>
-                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${
-                      team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'
-                    }`}>
-                      {r}
-                    </span>
+                    <Link href={`/match-iq/${p.id}`} className={`font-poppins text-sm font-medium hover:underline leading-tight break-words ${team1Won ? 'text-white' : 'text-white/40'}`}>{p.name}</Link>
+                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'}`}>{r}</span>
                   </div>
                 ))}
               </div>
-
-              {/* Score */}
-              <div className="shrink-0 text-center w-28">
-                {ratingGap >= 5 && (
-                  <p className="font-poppins text-white/20 text-xs mb-1.5 tracking-wide">
-                    {avg1} <span className="text-white/10 mx-0.5">·</span> {avg2}
-                  </p>
-                )}
-                <div className="flex items-center justify-center gap-2.5">
-                  <span className={`font-qaranta text-4xl leading-none ${team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team1_score}</span>
+              <div className="shrink-0 text-center w-24 sm:w-28">
+                {ratingGap >= 5 && <p className="font-poppins text-white/20 text-xs mb-1.5 tracking-wide">{avg1} <span className="text-white/10 mx-0.5">·</span> {avg2}</p>}
+                <div className="flex items-center justify-center gap-2">
+                  <span className={`font-qaranta text-3xl sm:text-4xl leading-none ${team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team1_score}</span>
                   <span className="font-poppins text-white/15 text-base">–</span>
-                  <span className={`font-qaranta text-4xl leading-none ${!team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team2_score}</span>
+                  <span className={`font-qaranta text-3xl sm:text-4xl leading-none ${!team1Won ? 'text-orange' : 'text-white/25'}`}>{match.team2_score}</span>
                 </div>
-                {match.set_scores && (
-                  <p className="font-poppins text-white/20 text-xs mt-1.5">
-                    {match.set_scores.map(s => `${s.t1}–${s.t2}`).join(', ')}
-                  </p>
-                )}
+                {match.set_scores && <p className="font-poppins text-white/20 text-[11px] sm:text-xs mt-1.5">{match.set_scores.map(s => `${s.t1}–${s.t2}`).join(', ')}</p>}
               </div>
-
-              {/* Team 2 — left aligned */}
               <div className="flex-1 space-y-2.5">
                 {[{ p: match.p3, r: r3 }, { p: match.p4, r: r4 }].map(({ p, r }) => (
                   <div key={p.id} className="flex items-center gap-2">
-                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${
-                      !team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'
-                    }`}>
-                      {r}
-                    </span>
-                    <Link
-                      href={`/match-iq/${p.id}`}
-                      className={`font-poppins text-sm font-medium hover:underline transition-colors leading-tight ${!team1Won ? 'text-white' : 'text-white/40'}`}
-                    >
-                      {p.name}
-                    </Link>
+                    <span className={`font-poppins text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 ${!team1Won ? 'bg-orange/15 text-orange/90' : 'bg-white/5 text-white/30'}`}>{r}</span>
+                    <Link href={`/match-iq/${p.id}`} className={`font-poppins text-sm font-medium hover:underline leading-tight break-words ${!team1Won ? 'text-white' : 'text-white/40'}`}>{p.name}</Link>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="border-t border-white/5 px-5 py-2.5 flex items-center justify-between">
+            <div className="border-t border-white/5 px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2">
               <p className="font-poppins text-white/25 text-xs">
                 {new Date(match.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
-                {match.court && <> · Box {match.court}</>}
-                {match.start_time && <> · {formatTime(match.start_time)}</>}
+                {match.court && <> · Box {match.court}</>}{match.start_time && <> · {formatTime(match.start_time)}</>}
               </p>
-              {isUpset && (
-                <span className="font-poppins text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-full px-2.5 py-0.5 tracking-widest uppercase">
-                  Upset
-                </span>
-              )}
+              {isUpset && <span className="font-poppins text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-full px-2.5 py-0.5 tracking-widest uppercase shrink-0">Upset</span>}
             </div>
-
           </div>
         )
       })}
