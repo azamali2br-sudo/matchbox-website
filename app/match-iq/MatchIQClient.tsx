@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
-import { BADGE_DEFS, BADGE_TONE, sortBadges, type BadgeKey } from '@/lib/badges'
+import { BADGE_DEFS, BADGE_TILE, BADGE_TEXT, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Player = {
   id: string
@@ -41,24 +41,22 @@ type Match = {
 }
 
 // ── Badges ──────────────────────────────────────────────────────────────────
-function BadgeChips({ keys, full = false }: { keys: BadgeKey[]; full?: boolean }) {
+// The highest-priority badge a player holds (drives the row tint + caption).
+function topBadge(keys: BadgeKey[]) {
   if (!keys.length) return null
+  return BADGE_DEFS[sortBadges(keys)[0]]
+}
+
+// One subdued caption naming the player's achievement(s) — readable, unlike a
+// row of look-alike emoji shields. Colour ties back to the row's tile tint.
+function AchievementLine({ keys }: { keys: BadgeKey[] }) {
+  const top = topBadge(keys)
+  if (!top) return null
+  const labels = sortBadges(keys).map(k => BADGE_DEFS[k].label).join(' · ')
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {sortBadges(keys).map(k => {
-        const d = BADGE_DEFS[k]
-        return full ? (
-          <span key={k} title={d.desc}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
-            <span>{d.icon}</span>{d.label}
-          </span>
-        ) : (
-          <span key={k} title={`${d.label} — ${d.desc}`}
-            className={`inline-flex items-center justify-center w-5 h-5 rounded-md border text-[11px] leading-none ${BADGE_TONE[d.tone]}`}>
-            {d.icon}
-          </span>
-        )
-      })}
+    <span className={`font-poppins text-[11px] font-semibold tracking-wide inline-flex items-center gap-1.5 min-w-0 ${BADGE_TEXT[top.tone]}`}>
+      <span className="text-xs leading-none shrink-0">{top.icon}</span>
+      <span className="truncate">{labels}</span>
     </span>
   )
 }
@@ -183,8 +181,6 @@ function Leaderboard({
     return <div className="space-y-3">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-navy-card rounded-2xl animate-pulse" />)}</div>
   }
 
-  const podium = draw === 'main' ? (data?.mainDraw ?? []).slice(0, 3) : []
-
   return (
     <div className="space-y-7">
       {/* Period controls */}
@@ -224,9 +220,6 @@ function Leaderboard({
         </p>
       </div>
 
-      {/* Podium */}
-      {podium.length > 0 && !search && <Podium top={podium} period={data?.monthLabel ?? ''} isAllTime={view === 'all'} />}
-
       {/* Draw toggle + search */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
@@ -264,62 +257,6 @@ function Leaderboard({
         </div>
       ) : (
         <LeaderTable players={shown} provisional={draw === 'qualifying'} sort={sort} setSort={setSort} />
-      )}
-    </div>
-  )
-}
-
-// ── Podium (top 3) ───────────────────────────────────────────────────────────
-function Podium({ top, period, isAllTime }: { top: Player[]; period: string; isAllTime: boolean }) {
-  const [champ, second, third] = top
-  const titles = isAllTime
-    ? ['All-Time #1', 'All-Time #2', 'All-Time #3']
-    : ['Champion', 'Challenger', 'Contender']
-
-  return (
-    <div className="space-y-3">
-      <p className="font-poppins text-white/30 text-[11px] uppercase tracking-[0.2em]">{period} · Podium</p>
-      {/* Champion feature card */}
-      <Link href={`/match-iq/${champ.id}`}
-        className="block rounded-3xl border border-yellow-400/25 bg-gradient-to-br from-yellow-400/10 via-navy-card to-navy-card p-5 sm:p-6 hover:border-yellow-400/45 transition-colors group">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xl">🏆</span>
-              <span className="font-poppins text-yellow-300 text-[11px] font-bold uppercase tracking-[0.18em]">{titles[0]}</span>
-            </div>
-            <p className="font-qaranta text-2xl sm:text-3xl text-white uppercase leading-tight break-words group-hover:text-orange transition-colors">{champ.name}</p>
-            <p className="font-poppins text-white/45 text-xs mt-1.5">
-              {champ.wins}W · {champ.losses}L · {champ.matches} matches
-              {champ.avgOpp !== null && <> · avg opp {champ.avgOpp}</>}
-            </p>
-            <div className="mt-2.5"><BadgeChips keys={champ.badges} full /></div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="font-qaranta text-5xl sm:text-6xl text-orange leading-none">{champ.rating}</div>
-            <div className="font-poppins text-white/35 text-[10px] uppercase tracking-widest mt-1">Rating</div>
-          </div>
-        </div>
-      </Link>
-      {/* Runner-ups */}
-      {(second || third) && (
-        <div className="grid grid-cols-2 gap-3">
-          {[{ p: second, t: titles[1], ring: 'border-slate-300/25', medal: '🥈' }, { p: third, t: titles[2], ring: 'border-amber-500/25', medal: '🥉' }]
-            .filter(x => x.p).map(({ p, t, ring, medal }) => (
-              <Link key={p.id} href={`/match-iq/${p.id}`}
-                className={`block rounded-2xl border ${ring} bg-navy-card p-4 hover:border-white/25 transition-colors group min-w-0`}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-sm">{medal}</span>
-                  <span className="font-poppins text-white/45 text-[10px] font-bold uppercase tracking-widest truncate">{t}</span>
-                </div>
-                <div className="flex items-end justify-between gap-2">
-                  <p className="font-poppins text-white text-sm font-semibold break-words leading-snug min-w-0 group-hover:text-orange transition-colors">{p.name}</p>
-                  <span className="font-qaranta text-2xl text-orange shrink-0 leading-none">{p.rating}</span>
-                </div>
-                <div className="mt-1.5"><BadgeChips keys={p.badges} /></div>
-              </Link>
-            ))}
-        </div>
       )}
     </div>
   )
@@ -376,15 +313,20 @@ function LeaderTable({
         const borderColor = provisional ? 'border-white/5'
           : rank === 1 ? 'border-yellow-400/20' : rank && rank <= 3 ? 'border-orange/15' : 'border-white/6'
 
+        // Badge-holders get a subtle on-theme tile tint + coloured left accent,
+        // keyed to their top badge. Everyone else stays the plain card.
+        const top = provisional ? null : topBadge(player.badges)
+        const tile = top ? `bg-gradient-to-r to-transparent border-l-2 ${BADGE_TILE[top.tone]}` : ''
+
         return (
           <Link key={player.id} href={`/match-iq/${player.id}`}
-            className={`block bg-navy-card border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
+            className={`block bg-navy-card ${tile} border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
             {/* Mobile */}
             <div className="sm:hidden flex items-start gap-3">
               <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center mt-0.5 ${rankColor}`}>{rank ?? '—'}</span>
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
-                {player.badges.length > 0 && <div className="mt-1"><BadgeChips keys={player.badges} /></div>}
+                {top && <div className="mt-1"><AchievementLine keys={player.badges} /></div>}
                 <p className="font-poppins text-white/40 text-[11px] mt-1">
                   <span>{player.matches} {player.matches === 1 ? 'match' : 'matches'}</span>
                   <span className="text-white/20 mx-1">·</span>
@@ -399,9 +341,9 @@ function LeaderTable({
             {/* Desktop */}
             <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 items-center">
               <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{rank ?? '—'}</span>
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex flex-col justify-center gap-0.5 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
-                <BadgeChips keys={player.badges} />
+                {top && <AchievementLine keys={player.badges} />}
               </div>
               <span className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
               <span className="font-poppins text-white/60 text-sm text-center font-medium">{player.matches}</span>

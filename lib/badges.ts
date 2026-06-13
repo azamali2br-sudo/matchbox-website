@@ -43,6 +43,35 @@ export const BADGE_TONE: Record<BadgeDef['tone'], string> = {
   blue:   'text-blue-300 bg-blue-400/10 border-blue-400/25',
 }
 
+// tone → leaderboard-row tile tint. Pairs a faint left-to-right gradient (use
+// with `bg-gradient-to-r to-transparent` over the base card) and a coloured left
+// accent border, so a badge-holder's whole row reads as highlighted but stays on
+// the navy theme. Subtler than the pill so names stay the focus.
+export const BADGE_TILE: Record<BadgeDef['tone'], string> = {
+  gold:   'border-l-yellow-400/70 from-yellow-400/10',
+  silver: 'border-l-slate-300/60 from-slate-300/[0.07]',
+  bronze: 'border-l-amber-500/60 from-amber-500/[0.07]',
+  orange: 'border-l-orange/60 from-orange/[0.07]',
+  cyan:   'border-l-cyan-400/60 from-cyan-400/[0.07]',
+  green:  'border-l-green-500/60 from-green-500/[0.07]',
+  red:    'border-l-red-500/60 from-red-500/[0.07]',
+  purple: 'border-l-purple-400/60 from-purple-400/[0.07]',
+  blue:   'border-l-blue-400/60 from-blue-400/[0.07]',
+}
+
+// tone → text colour only (for the subdued achievement caption on each row).
+export const BADGE_TEXT: Record<BadgeDef['tone'], string> = {
+  gold:   'text-yellow-300/90',
+  silver: 'text-slate-300/90',
+  bronze: 'text-amber-500/90',
+  orange: 'text-orange/90',
+  cyan:   'text-cyan-300/90',
+  green:  'text-green-400/90',
+  red:    'text-red-400/90',
+  purple: 'text-purple-300/90',
+  blue:   'text-blue-300/90',
+}
+
 export function sortBadges(keys: BadgeKey[]): BadgeKey[] {
   return [...keys].sort((a, b) => BADGE_ORDER.indexOf(a) - BADGE_ORDER.indexOf(b))
 }
