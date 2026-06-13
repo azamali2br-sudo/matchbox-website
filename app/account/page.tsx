@@ -80,7 +80,7 @@ export default function AccountPage() {
         <div className="flex items-start justify-between gap-4 mb-8">
           <div className="min-w-0">
             <h1 className="font-qaranta text-4xl text-white mb-1">Hey {data.account.name.split(' ')[0]}</h1>
-            <p className="font-poppins text-white/45 text-sm truncate">
+            <p className="font-poppins text-white/45 text-sm break-words leading-snug">
               {formatPhoneDisplay(data.account.phone)}{data.account.email ? ` · ${data.account.email}` : ''}
             </p>
           </div>
