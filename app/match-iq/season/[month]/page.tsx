@@ -2,11 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  monthLabel, replaySeason, awardMatchIds, enrichMatches,
-  type AwardMatch, type MatchRow,
+  monthLabel, replaySeason, awardMatchIds, enrichMatches, type MatchRow,
 } from '@/lib/leaderboard'
 import { loadMatchIqInputs, computeSeasonStandings, getClosedMonths, getSeasonSnapshot, type SeasonStandings } from '@/lib/seasons'
 import { BADGE_DEFS, BADGE_TONE, type BadgeKey } from '@/lib/badges'
+import { AwardMatchRow, SlayerScorecard } from '@/components/match-iq/AwardMatch'
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
@@ -30,33 +30,6 @@ export async function generateMetadata({ params }: { params: Promise<{ month: st
     title: `${label} Season Recap | Matchbox Match IQ`,
     description: `Final Match IQ standings, champion and badges for ${label} at Matchbox Padel Club.`,
   }
-}
-
-// One supporting match — who teamed up, who they beat, at what ratings.
-function AwardMatchCard({ m, isUpset }: { m: AwardMatch; isUpset?: boolean }) {
-  const date = new Date(m.playedOn).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })
-  const gap = m.loserAvg - m.winnerAvg
-  return (
-    <div className="bg-navy/50 rounded-lg px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="font-poppins text-[10px] text-white/40 uppercase tracking-wider">{date}</span>
-        {isUpset && gap > 0 && (
-          <span className="font-poppins text-[10px] text-purple-300 font-semibold">Upset · beat a team {gap} higher</span>
-        )}
-      </div>
-      <div className="flex items-center gap-2.5">
-        <div className="flex-1 min-w-0">
-          <p className="font-poppins text-xs text-white font-semibold break-words">{m.winners.map(w => `${w.name} (${w.rating})`).join(' & ')}</p>
-          <p className="font-poppins text-[10px] text-green-400/80">won · team avg {m.winnerAvg}</p>
-        </div>
-        <span className="font-qaranta text-base text-orange shrink-0">{m.winnerScore}–{m.loserScore}</span>
-        <div className="flex-1 min-w-0 text-right">
-          <p className="font-poppins text-xs text-white/55 font-medium break-words">{m.losers.map(l => `${l.name} (${l.rating})`).join(' & ')}</p>
-          <p className="font-poppins text-[10px] text-white/35">team avg {m.loserAvg}</p>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 export default async function SeasonRecapPage({ params }: { params: Promise<{ month: string }> }) {
@@ -150,11 +123,15 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                             <span className="text-[9px] text-white/40 group-open:rotate-180 transition-transform">▼</span>
                           </span>
                         </summary>
-                        <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-white/10">
-                          {detail.length > 0 ? detail.map(m => (
-                            <AwardMatchCard key={m.id} m={m} isUpset={key === 'slayer'} />
-                          )) : (
-                            <p className="font-poppins text-[11px] text-white/40 py-2 px-1">Match details unavailable.</p>
+                        <div className="px-3 pb-3 pt-2 border-t border-white/10">
+                          {detail.length === 0 ? (
+                            <p className="font-poppins text-[11px] text-white/40 py-1 px-1">Match details unavailable.</p>
+                          ) : key === 'slayer' ? (
+                            <SlayerScorecard m={detail[0]} />
+                          ) : (
+                            <div className="px-1">
+                              {detail.map(m => <AwardMatchRow key={m.id} m={m} highlightId={winners[0].id} />)}
+                            </div>
                           )}
                         </div>
                       </details>

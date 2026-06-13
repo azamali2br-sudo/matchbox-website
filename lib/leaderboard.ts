@@ -198,8 +198,8 @@ export function awardMatchIds(
 
 export type AwardMatch = {
   id: string; playedOn: string
-  winners: { name: string; rating: number }[]
-  losers: { name: string; rating: number }[]
+  winners: { id: string; name: string; rating: number }[]
+  losers: { id: string; name: string; rating: number }[]
   winnerAvg: number; loserAvg: number
   winnerScore: number; loserScore: number
 }
@@ -213,8 +213,8 @@ export function enrichMatches(ids: string[], log: Map<string, MatchSnapshot>, na
     const lose = s.team1Won ? s.team2 : s.team1
     out.push({
       id: s.id, playedOn: s.playedOn,
-      winners: win.map(w => ({ name: nameById[w.id] ?? 'Unknown', rating: w.pre })),
-      losers: lose.map(l => ({ name: nameById[l.id] ?? 'Unknown', rating: l.pre })),
+      winners: win.map(w => ({ id: w.id, name: nameById[w.id] ?? 'Unknown', rating: w.pre })),
+      losers: lose.map(l => ({ id: l.id, name: nameById[l.id] ?? 'Unknown', rating: l.pre })),
       winnerAvg: s.team1Won ? s.team1Avg : s.team2Avg,
       loserAvg: s.team1Won ? s.team2Avg : s.team1Avg,
       winnerScore: s.team1Won ? s.team1Score : s.team2Score,

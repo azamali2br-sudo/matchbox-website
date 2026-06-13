@@ -87,7 +87,7 @@ function BadgeLegend() {
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left">
         <span className="font-poppins text-xs font-semibold text-white/70">
-          What do the badges mean? <span className="text-white/30 font-normal">Hot Streak, Iron Man, Giant Slayer…</span>
+          What do the badges mean? <span className="text-white/30 font-normal hidden sm:inline">Hot Streak, Iron Man, Giant Slayer…</span>
         </span>
         <span className={`text-white/40 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
@@ -140,14 +140,14 @@ export default function MatchIQClient() {
     <div className="min-h-screen bg-navy pt-28">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         {/* Hero */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-5">
           <div className="inline-flex items-center gap-2 bg-orange/10 border border-orange/25 rounded-full px-4 py-2">
             <span className="w-2 h-2 rounded-full bg-orange animate-pulse" />
             <span className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest">Live Rankings</span>
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
           <div>
             <h1 className="font-qaranta text-5xl sm:text-6xl md:text-7xl text-white uppercase leading-none">
               Match<span className="text-orange">IQ</span>
@@ -163,7 +163,7 @@ export default function MatchIQClient() {
         </div>
 
         {/* Stats strip */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-10">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-7">
           {[
             { label: 'Players this month', value: data?.totalPlayers || '—' },
             { label: 'Matches this month', value: data?.totalMatches || '—' },
@@ -177,7 +177,7 @@ export default function MatchIQClient() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-8">
+        <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-6">
           {(['leaderboard', 'matches'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`font-poppins text-xs font-semibold px-5 py-2.5 rounded-lg transition-all ${tab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
@@ -225,9 +225,9 @@ function Leaderboard({
   }
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5">
       {/* Period controls — monthly only (month picker + recap) */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
         {data && (
           <div className="relative">
             <select
@@ -250,9 +250,9 @@ function Leaderboard({
             Season recap ↗
           </Link>
         )}
-        <p className="font-poppins text-white/30 text-xs ml-auto">
-          {data?.closed ? 'Final standings — season closed' : 'Resets to 60 each month'}
-        </p>
+        {data?.closed && (
+          <p className="font-poppins text-white/30 text-xs ml-auto hidden sm:block">Final standings — season closed</p>
+        )}
       </div>
 
       {/* Draw toggle + search */}
@@ -348,8 +348,9 @@ function LeaderTable({
         const rank = player.rank
         const rankColor = provisional ? 'text-white/30'
           : rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/30'
-        const borderColor = provisional ? 'border-white/5'
-          : rank === 1 ? 'border-yellow-400/20' : rank && rank <= 3 ? 'border-orange/15' : 'border-white/6'
+        // Uniform tiles — the rank number's colour (gold/silver/bronze) is the
+        // only podium signal, which reads cleaner than per-row border tints.
+        const borderColor = provisional ? 'border-white/5' : 'border-white/8'
 
         // Standard tile. Live Hot Streak + month badges are written under the
         // name as a caption (see AchievementLine).

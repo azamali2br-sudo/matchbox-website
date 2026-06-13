@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { BADGE_DEFS, BADGE_TONE, sortBadges, type BadgeKey } from '@/lib/badges'
+import { SlayerScorecard } from '@/components/match-iq/AwardMatch'
+import type { AwardMatch } from '@/lib/leaderboard'
 
 type Player = { id: string; name: string; rating: number; wins: number; losses: number; created_at: string }
 type RatingPoint = { rating: number; created_at: string }
@@ -16,40 +18,8 @@ type Match = {
   set_scores: SetScore[] | null
   p1: MatchPlayer; p2: MatchPlayer; p3: MatchPlayer; p4: MatchPlayer
 }
-type AwardMatch = {
-  id: string; playedOn: string
-  winners: { name: string; rating: number }[]
-  losers: { name: string; rating: number }[]
-  winnerAvg: number; loserAvg: number
-  winnerScore: number; loserScore: number
-}
 type TrophyMonth = { month: string; monthLabel: string; rank: number | null; badges: BadgeKey[]; slayerMatch?: AwardMatch | null }
 type AllTime = { rank: number | null; avgOpp: number | null; matches: number }
-
-// The match behind a Giant Slayer badge — who teamed up, who they beat, ratings.
-function SlayerMatch({ m }: { m: AwardMatch }) {
-  const date = new Date(m.playedOn).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })
-  const gap = m.loserAvg - m.winnerAvg
-  return (
-    <div className="mt-2 bg-purple-400/[0.06] border border-purple-400/20 rounded-xl px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="font-poppins text-[10px] text-purple-300 font-semibold uppercase tracking-wider">Giant Slayer · {date}</span>
-        {gap > 0 && <span className="font-poppins text-[10px] text-purple-300/80">beat a team {gap} higher</span>}
-      </div>
-      <div className="flex items-center gap-2.5">
-        <div className="flex-1 min-w-0">
-          <p className="font-poppins text-xs text-white font-semibold break-words">{m.winners.map(w => `${w.name} (${w.rating})`).join(' & ')}</p>
-          <p className="font-poppins text-[10px] text-green-400/80">won · team avg {m.winnerAvg}</p>
-        </div>
-        <span className="font-qaranta text-base text-orange shrink-0">{m.winnerScore}–{m.loserScore}</span>
-        <div className="flex-1 min-w-0 text-right">
-          <p className="font-poppins text-xs text-white/55 font-medium break-words">{m.losers.map(l => `${l.name} (${l.rating})`).join(' & ')}</p>
-          <p className="font-poppins text-[10px] text-white/35">team avg {m.loserAvg}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export default function PlayerPage({ params }: { params: Promise<{ playerId: string }> }) {
   const { playerId } = use(params)
@@ -164,7 +134,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
                       })}
                     </div>
                   </div>
-                  {t.slayerMatch && <SlayerMatch m={t.slayerMatch} />}
+                  {t.slayerMatch && <div className="mt-2.5"><SlayerScorecard m={t.slayerMatch} /></div>}
                 </div>
               ))}
             </div>
