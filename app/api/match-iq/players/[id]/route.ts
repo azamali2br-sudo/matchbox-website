@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { buildStandings, debutMonthMap, monthsWithMatches, monthLabel } from '@/lib/leaderboard'
+import {
+  buildStandings, debutMonthMap, monthsWithMatches, monthLabel,
+  replaySeason, awardMatchIds, enrichMatches, type AwardMatch,
+} from '@/lib/leaderboard'
 import { loadMatchIqInputs, getAllSnapshots } from '@/lib/seasons'
 import type { BadgeKey } from '@/lib/badges'
 
@@ -44,16 +47,24 @@ export async function GET(
 
   // Per-month badges → trophy case (newest first, only months they earned
   // something). Closed months read their FROZEN snapshot so the trophy case
-  // matches the final, announced board; open months recompute live.
-  const trophyCase: { month: string; monthLabel: string; rank: number | null; badges: BadgeKey[]; final: boolean }[] = []
+  // matches the final, announced board; open months recompute live. When the
+  // player won Giant Slayer that month, attach the upset match for context.
+  const trophyCase: {
+    month: string; monthLabel: string; rank: number | null; badges: BadgeKey[]
+    final: boolean; slayerMatch: AwardMatch | null
+  }[] = []
   for (const ym of monthsWithMatches(allMatches)) {
     const snap = snapshots[ym]
-    const mainDraw = snap
-      ? snap.mainDraw
-      : buildStandings(allMatches.filter(m => m.played_on.slice(0, 7) === ym), { nameById, debutMonth, month: ym }).mainDraw
-    const row = mainDraw.find(p => p.id === id)
+    const monthMatches = allMatches.filter(m => m.played_on.slice(0, 7) === ym)
+    const draws = snap ?? buildStandings(monthMatches, { nameById, debutMonth, month: ym })
+    const row = [...draws.mainDraw, ...draws.qualifying].find(p => p.id === id)
     if (row && row.badges.length) {
-      trophyCase.push({ month: ym, monthLabel: monthLabel(ym), rank: row.rank, badges: row.badges, final: !!snap })
+      let slayerMatch: AwardMatch | null = null
+      if (row.badges.includes('slayer')) {
+        const { log, upsetMatchByPlayer } = replaySeason(monthMatches)
+        slayerMatch = enrichMatches(awardMatchIds('slayer', id, monthMatches, upsetMatchByPlayer), log, nameById)[0] ?? null
+      }
+      trophyCase.push({ month: ym, monthLabel: monthLabel(ym), rank: row.rank, badges: row.badges, final: !!snap, slayerMatch })
     }
   }
 

@@ -1,20 +1,25 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { monthLabel } from '@/lib/leaderboard'
+import {
+  monthLabel, replaySeason, awardMatchIds, enrichMatches,
+  type AwardMatch, type MatchRow,
+} from '@/lib/leaderboard'
 import { loadMatchIqInputs, computeSeasonStandings, getClosedMonths, getSeasonSnapshot, type SeasonStandings } from '@/lib/seasons'
 import { BADGE_DEFS, BADGE_TONE, type BadgeKey } from '@/lib/badges'
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
-async function getSeason(month: string): Promise<{ standings: SeasonStandings; closed: boolean } | null> {
+async function getSeason(month: string): Promise<
+  { standings: SeasonStandings; closed: boolean; nameById: Record<string, string>; monthMatches: MatchRow[] } | null
+> {
   if (!MONTH_RE.test(month)) return null
+  const { nameById, allMatches } = await loadMatchIqInputs()
+  const monthMatches = allMatches.filter(m => m.played_on.slice(0, 7) === month)
   const closed = (await getClosedMonths()).has(month)
   const snap = closed ? await getSeasonSnapshot(month) : null
-  if (snap) return { standings: snap, closed: true }
-  const { nameById, allMatches } = await loadMatchIqInputs()
-  const standings = computeSeasonStandings(month, nameById, allMatches)
-  return { standings, closed }
+  const standings = snap ?? computeSeasonStandings(month, nameById, allMatches)
+  return { standings, closed, nameById, monthMatches }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ month: string }> }): Promise<Metadata> {
@@ -27,28 +32,61 @@ export async function generateMetadata({ params }: { params: Promise<{ month: st
   }
 }
 
+// One supporting match — who teamed up, who they beat, at what ratings.
+function AwardMatchCard({ m, isUpset }: { m: AwardMatch; isUpset?: boolean }) {
+  const date = new Date(m.playedOn).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })
+  const gap = m.loserAvg - m.winnerAvg
+  return (
+    <div className="bg-navy/50 rounded-lg px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="font-poppins text-[10px] text-white/40 uppercase tracking-wider">{date}</span>
+        {isUpset && gap > 0 && (
+          <span className="font-poppins text-[10px] text-purple-300 font-semibold">Upset · beat a team {gap} higher</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 min-w-0">
+          <p className="font-poppins text-xs text-white font-semibold break-words">{m.winners.map(w => `${w.name} (${w.rating})`).join(' & ')}</p>
+          <p className="font-poppins text-[10px] text-green-400/80">won · team avg {m.winnerAvg}</p>
+        </div>
+        <span className="font-qaranta text-base text-orange shrink-0">{m.winnerScore}–{m.loserScore}</span>
+        <div className="flex-1 min-w-0 text-right">
+          <p className="font-poppins text-xs text-white/55 font-medium break-words">{m.losers.map(l => `${l.name} (${l.rating})`).join(' & ')}</p>
+          <p className="font-poppins text-[10px] text-white/35">team avg {m.loserAvg}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default async function SeasonRecapPage({ params }: { params: Promise<{ month: string }> }) {
   const { month } = await params
   const season = await getSeason(month)
   if (!season) notFound()
 
-  const { standings, closed } = season
+  const { standings, closed, nameById, monthMatches } = season
   const label = monthLabel(month)
   const { mainDraw } = standings
   const champion = mainDraw[0] ?? null
 
-  // Achievement awards — the first Main Draw player holding each badge.
+  // Award winners (Giant Slayer is a pair) + their supporting matches.
+  const allPlayers = [...standings.mainDraw, ...standings.qualifying]
+  const { log, upsetMatchByPlayer } = replaySeason(monthMatches)
   const awardKeys: BadgeKey[] = ['ironman', 'perfect', 'streak', 'slayer', 'rookie']
   const awards = awardKeys
-    .map(key => ({ key, player: mainDraw.find(p => p.badges.includes(key)) }))
-    .filter((a): a is { key: BadgeKey; player: NonNullable<typeof a.player> } => !!a.player)
+    .map(key => {
+      const winners = allPlayers.filter(p => p.badges.includes(key))
+      if (!winners.length) return null
+      const detail = enrichMatches(awardMatchIds(key, winners[0].id, monthMatches, upsetMatchByPlayer), log, nameById)
+      return { key, winners, detail }
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null)
 
   return (
     <div className="min-h-screen bg-navy pt-28">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <Link href="/match-iq" className="font-poppins text-white/40 text-xs hover:text-white/70">← Back to Match IQ</Link>
 
-        {/* Recap card — composed to look good as a single screenshot */}
         <div className="mt-5 bg-navy-card border border-white/10 rounded-3xl overflow-hidden">
           {/* Header band */}
           <div className="bg-gradient-to-br from-orange/20 to-transparent border-b border-white/10 px-6 sm:px-8 py-7 text-center">
@@ -93,20 +131,33 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                 </div>
               )}
 
-              {/* Achievement awards */}
+              {/* Achievement awards — click a title to see the matches behind it */}
               {awards.length > 0 && (
                 <div className="mt-8 space-y-2">
-                  <p className="font-poppins text-white/30 text-[11px] uppercase tracking-widest mb-3">Awards</p>
-                  {awards.map(({ key, player }) => {
+                  <p className="font-poppins text-white/30 text-[11px] uppercase tracking-widest mb-3">Awards · tap to see the matches</p>
+                  {awards.map(({ key, winners, detail }) => {
                     const def = BADGE_DEFS[key]
+                    const title = key === 'streak' ? `${def.label} (${winners[0].maxStreak})` : def.label
                     return (
-                      <div key={key} className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 ${BADGE_TONE[def.tone]}`}>
-                        <span className="flex items-baseline gap-2 min-w-0">
-                          <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{key === 'streak' ? `${def.label} (${player.maxStreak})` : def.label}</span>
-                          <span className="font-poppins text-[11px] opacity-60 truncate hidden sm:inline">— {def.desc}</span>
-                        </span>
-                        <span className="font-poppins text-sm text-white font-semibold truncate">{player.name}</span>
-                      </div>
+                      <details key={key} className={`group rounded-xl border ${BADGE_TONE[def.tone]}`}>
+                        <summary className="flex items-center justify-between gap-3 px-4 py-2.5 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                          <span className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{title}</span>
+                            <span className="font-poppins text-[11px] opacity-60 truncate hidden sm:inline">— {def.desc}</span>
+                          </span>
+                          <span className="flex items-center gap-2 shrink-0">
+                            <span className="font-poppins text-sm text-white font-semibold truncate max-w-[10rem]">{winners.map(w => w.name).join(' & ')}</span>
+                            <span className="text-[9px] text-white/40 group-open:rotate-180 transition-transform">▼</span>
+                          </span>
+                        </summary>
+                        <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-white/10">
+                          {detail.length > 0 ? detail.map(m => (
+                            <AwardMatchCard key={m.id} m={m} isUpset={key === 'slayer'} />
+                          )) : (
+                            <p className="font-poppins text-[11px] text-white/40 py-2 px-1">Match details unavailable.</p>
+                          )}
+                        </div>
+                      </details>
                     )
                   })}
                 </div>
