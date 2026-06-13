@@ -83,15 +83,15 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
           </div>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-4 mt-8">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-8">
             {[
               { label: 'Wins', value: player.wins, color: 'text-green-400' },
               { label: 'Losses', value: player.losses, color: 'text-red-400' },
               { label: 'Win Rate', value: `${winRate}%`, color: 'text-orange' },
             ].map(s => (
-              <div key={s.label} className="bg-navy rounded-xl p-4 text-center border border-white/5">
-                <div className={`font-qaranta text-3xl ${s.color}`}>{s.value}</div>
-                <div className="font-poppins text-white/35 text-xs mt-1">{s.label}</div>
+              <div key={s.label} className="bg-navy rounded-xl px-2 py-4 sm:p-4 text-center border border-white/5">
+                <div className={`font-qaranta text-2xl sm:text-3xl leading-none whitespace-nowrap ${s.color}`}>{s.value}</div>
+                <div className="font-poppins text-white/35 text-[11px] sm:text-xs mt-1.5">{s.label}</div>
               </div>
             ))}
           </div>
@@ -120,12 +120,12 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
                 const oppScore = onTeam1 ? match.team2_score : match.team1_score
 
                 return (
-                  <div key={match.id} className="flex items-center gap-4 py-3 border-b border-white/5 last:border-0">
-                    <span className={`font-poppins text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 ${won ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                  <div key={match.id} className="flex items-start gap-3 sm:gap-4 py-3 border-b border-white/5 last:border-0">
+                    <span className={`font-poppins text-xs font-bold px-2.5 py-1 rounded-lg shrink-0 mt-0.5 ${won ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
                       {won ? 'W' : 'L'}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="font-poppins text-white/70 text-sm truncate">
+                      <p className="font-poppins text-white/70 text-sm break-words leading-snug">
                         {myTeam.map(p => p.name).join(' & ')}
                         <span className="text-white/25 mx-2">vs</span>
                         {oppTeam.map(p => p.name).join(' & ')}
@@ -164,7 +164,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
 function RatingGraph({ points }: { points: RatingPoint[] }) {
   const ratings = points.map(p => p.rating)
   const min = Math.max(0, Math.min(...ratings) - 5)
-  const max = Math.min(95, Math.max(...ratings) + 5)
+  const max = Math.min(100, Math.max(...ratings) + 5)
   const range = max - min || 10
   const W = 600
   const H = 120
