@@ -282,7 +282,7 @@ function PlayerList({ players, provisional = false }: { players: Player[]; provi
                 {!provisional && <RankArrow change={player.rankChange} />}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">
+                <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">
                   {player.name}
                   {provisional && (
                     <span className="ml-2 font-poppins text-[10px] uppercase tracking-wider text-orange/70 bg-orange/10 border border-orange/20 rounded-full px-2 py-0.5">
