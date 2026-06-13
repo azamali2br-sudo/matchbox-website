@@ -57,7 +57,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ matches, matchRatings, total: count ?? 0 })
+  // Resolve "submitted by" (stored as the submitter's account id) → a display
+  // name, so the admin approval view shows who sent it instead of a raw id.
+  const submitterIds = [
+    ...new Set(
+      matches
+        .map((m: { submitted_by: string | null }) => m.submitted_by)
+        .filter((v: string | null): v is string => !!v && UUID_RE.test(v)),
+    ),
+  ]
+  const submitterNames: Record<string, string> = {}
+  if (submitterIds.length > 0) {
+    const { data: accts } = await supabaseAdmin
+      .from('accounts')
+      .select('id, name')
+      .in('id', submitterIds)
+    for (const a of accts ?? []) submitterNames[a.id] = a.name
+  }
+  const matchesWithSubmitter = matches.map((m: { submitted_by: string | null }) => ({
+    ...m,
+    submitted_by_name: (m.submitted_by && submitterNames[m.submitted_by]) || null,
+  }))
+
+  return NextResponse.json({ matches: matchesWithSubmitter, matchRatings, total: count ?? 0 })
 }
 
 export async function POST(request: NextRequest) {

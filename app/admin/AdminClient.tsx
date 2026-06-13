@@ -827,7 +827,7 @@ function Empty({ title, sub }: { title: string; sub: string }) {
 
 type PendingMatch = {
   id: string; played_on: string; court: string | null; start_time: string | null
-  team1_score: number; team2_score: number; submitted_by: string; created_at: string
+  team1_score: number; team2_score: number; submitted_by: string; submitted_by_name: string | null; created_at: string
   p1: { id: string; name: string }; p2: { id: string; name: string }
   p3: { id: string; name: string }; p4: { id: string; name: string }
 }
@@ -882,7 +882,7 @@ function MatchIQAdmin() {
                   <p className="font-poppins text-white/30 text-xs">
                     Played {new Date(m.played_on).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })}
                     {m.court && ` · Box ${m.court}`}{m.start_time && ` · ${formatTime(m.start_time)}`}
-                    {' · '}Submitted by {m.submitted_by}
+                    {' · '}Submitted by {m.submitted_by_name ?? m.submitted_by}
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
