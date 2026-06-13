@@ -72,9 +72,8 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
             <div className="px-6 sm:px-8 py-8">
               {/* Champion spotlight */}
               <div className="text-center">
-                <div className="text-5xl">🏆</div>
-                <p className="font-poppins text-yellow-300 text-xs font-semibold uppercase tracking-[0.2em] mt-2">Champion</p>
-                <p className="font-qaranta text-3xl sm:text-4xl text-white mt-1 break-words">{champion.name}</p>
+                <p className="font-poppins text-yellow-300 text-xs font-semibold uppercase tracking-[0.28em]">Champion</p>
+                <p className="font-qaranta text-4xl sm:text-5xl text-white mt-2 break-words leading-none">{champion.name}</p>
                 <p className="font-poppins text-white/45 text-sm mt-1">
                   Rating {champion.rating} · {champion.wins}W–{champion.losses}L
                   {champion.winRate != null && ` · ${champion.winRate}% win`}
@@ -86,8 +85,8 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                 <div className="grid grid-cols-2 gap-3 mt-7">
                   {mainDraw.slice(1, 3).map((p, i) => (
                     <div key={p.id} className="bg-navy/50 border border-white/8 rounded-2xl px-4 py-4 text-center">
-                      <div className="text-2xl">{i === 0 ? '🥈' : '🥉'}</div>
-                      <p className="font-qaranta text-lg text-white mt-1 break-words">{p.name}</p>
+                      <p className={`font-poppins text-[10px] font-semibold uppercase tracking-widest ${i === 0 ? 'text-slate-300' : 'text-amber-500'}`}>{i === 0 ? 'Runner-up' : 'Third Place'}</p>
+                      <p className="font-qaranta text-lg text-white mt-1.5 break-words">{p.name}</p>
                       <p className="font-poppins text-white/40 text-xs mt-0.5">Rating {p.rating} · {p.wins}W–{p.losses}L</p>
                     </div>
                   ))}
@@ -102,8 +101,7 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                     const def = BADGE_DEFS[key]
                     return (
                       <div key={key} className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 ${BADGE_TONE[def.tone]}`}>
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className="text-base shrink-0">{def.icon}</span>
+                        <span className="flex items-baseline gap-2 min-w-0">
                           <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{def.label}</span>
                           <span className="font-poppins text-[11px] opacity-60 truncate hidden sm:inline">— {def.desc}</span>
                         </span>

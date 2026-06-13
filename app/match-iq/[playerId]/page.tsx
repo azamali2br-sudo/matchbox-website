@@ -114,7 +114,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
         {/* Trophy case */}
         {trophyCase.length > 0 && (
           <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8 mb-6">
-            <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-5">🏆 Trophy Case</h2>
+            <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-5">Trophy Case</h2>
             <div className="space-y-3.5">
               {trophyCase.map(t => (
                 <div key={t.month} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -124,8 +124,8 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
                       const d = BADGE_DEFS[k]
                       return (
                         <span key={k} title={d.desc}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
-                          <span>{d.icon}</span>{d.label}
+                          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+                          {d.label}
                         </span>
                       )
                     })}

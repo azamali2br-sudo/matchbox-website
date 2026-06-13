@@ -126,8 +126,8 @@ export default function AccountPage() {
                       const d = BADGE_DEFS[k]
                       return (
                         <span key={k} title={d.desc}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
-                          <span>{d.icon}</span>{d.label}
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+                          {d.label}
                         </span>
                       )
                     })}

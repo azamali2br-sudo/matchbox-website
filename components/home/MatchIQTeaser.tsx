@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BADGE_DEFS, type BadgeKey } from "@/lib/badges";
+import { BADGE_DEFS, BADGE_TEXT, type BadgeKey } from "@/lib/badges";
 
 type Player = {
   id: string;
@@ -127,9 +127,8 @@ export default function MatchIQTeaser() {
                       </div>
                       <span className="font-poppins text-sm text-white font-medium truncate">{player.name}</span>
                       {player.badges?.[0] && (
-                        <span title={BADGE_DEFS[player.badges[0]].label} className="text-xs shrink-0 leading-none">
-                          {BADGE_DEFS[player.badges[0]].icon}
-                        </span>
+                        <span title={BADGE_DEFS[player.badges[0]].label}
+                          className={`shrink-0 w-1.5 h-1.5 rounded-full bg-current ${BADGE_TEXT[BADGE_DEFS[player.badges[0]].tone]}`} />
                       )}
                     </div>
                     <span className="col-span-3 font-poppins text-xs text-white/40 text-center">{player.matches}</span>

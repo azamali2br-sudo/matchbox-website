@@ -88,7 +88,6 @@ export function buildStandings(
   give(mainDraw[0], 'champion')
   give(mainDraw[1], 'challenger')
   give(mainDraw[2], 'contender')
-  give(mainDraw[3], 'top5'); give(mainDraw[4], 'top5')
 
   const maxMatches = Math.max(0, ...mainDraw.map(p => p.matches))
   if (maxMatches >= MAIN_DRAW_MIN) mainDraw.filter(p => p.matches === maxMatches).forEach(p => give(p, 'ironman'))

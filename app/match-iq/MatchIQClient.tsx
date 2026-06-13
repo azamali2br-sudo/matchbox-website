@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
-import { BADGE_DEFS, BADGE_TILE, BADGE_TEXT, sortBadges, type BadgeKey } from '@/lib/badges'
+import { BADGE_DEFS, BADGE_ORDER, BADGE_TILE, BADGE_TEXT, sortBadges, type BadgeKey } from '@/lib/badges'
 
 type Player = {
   id: string
@@ -48,16 +48,45 @@ function topBadge(keys: BadgeKey[]) {
 }
 
 // One subdued caption naming the player's achievement(s) — readable, unlike a
-// row of look-alike emoji shields. Colour ties back to the row's tile tint.
+// row of look-alike icons. Colour ties back to the row's tile tint.
 function AchievementLine({ keys }: { keys: BadgeKey[] }) {
   const top = topBadge(keys)
   if (!top) return null
   const labels = sortBadges(keys).map(k => BADGE_DEFS[k].label).join(' · ')
   return (
-    <span className={`font-poppins text-[11px] font-semibold tracking-wide inline-flex items-center gap-1.5 min-w-0 ${BADGE_TEXT[top.tone]}`}>
-      <span className="text-xs leading-none shrink-0">{top.icon}</span>
-      <span className="truncate">{labels}</span>
+    <span className={`font-poppins text-[11px] font-semibold tracking-wide truncate min-w-0 ${BADGE_TEXT[top.tone]}`}>
+      {labels}
     </span>
+  )
+}
+
+// Collapsible key so a first-time visitor can learn what Challenger / Iron Man /
+// Hot Streak etc. actually mean. Colour-coded to match the row captions.
+function BadgeLegend() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="bg-navy-card border border-white/8 rounded-2xl">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left">
+        <span className="font-poppins text-xs font-semibold text-white/70">
+          What do the badges mean? <span className="text-white/30 font-normal">Champion, Iron Man, Hot Streak…</span>
+        </span>
+        <span className={`text-white/40 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="border-t border-white/8 px-4 sm:px-5 py-4 grid sm:grid-cols-2 gap-x-6 gap-y-3">
+          {BADGE_ORDER.map(k => {
+            const d = BADGE_DEFS[k]
+            return (
+              <div key={k} className="flex items-baseline gap-2">
+                <span className={`font-poppins text-xs font-semibold shrink-0 ${BADGE_TEXT[d.tone]}`}>{d.label}</span>
+                <span className="font-poppins text-white/40 text-[11px] leading-snug">— {d.desc}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -241,9 +270,12 @@ function Leaderboard({
 
       {draw === 'qualifying' && (
         <p className="font-poppins text-white/35 text-xs -mt-3">
-          Played fewer than 3 matches {view === 'all' ? '' : 'this month'} — keep playing to join the Main Draw.
+          Played fewer than 3 matches {view === 'all' ? '' : 'this month'} — not ranked yet (too few games to be fair). The counter shows how close each player is to the Main Draw.
         </p>
       )}
+
+      {/* Badge guide — only relevant to the ranked Main Draw */}
+      {draw === 'main' && !search && shown.some(p => p.badges.length > 0) && <BadgeLegend />}
 
       {/* Table */}
       {shown.length === 0 ? (
@@ -323,7 +355,11 @@ function LeaderTable({
             className={`block bg-navy-card ${tile} border ${borderColor} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
             {/* Mobile */}
             <div className="sm:hidden flex items-start gap-3">
-              <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center mt-0.5 ${rankColor}`}>{rank ?? '—'}</span>
+              {provisional ? (
+                <span className="w-7 shrink-0 text-center mt-1 font-poppins text-[11px] font-semibold leading-none text-orange/70">{player.matches}<span className="text-white/25">/3</span></span>
+              ) : (
+                <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center mt-0.5 ${rankColor}`}>{rank ?? '—'}</span>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
                 {top && <div className="mt-1"><AchievementLine keys={player.badges} /></div>}
@@ -340,7 +376,11 @@ function LeaderTable({
 
             {/* Desktop */}
             <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 items-center">
-              <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{rank ?? '—'}</span>
+              {provisional ? (
+                <span className="text-center font-poppins text-[11px] font-semibold leading-none text-orange/70">{player.matches}<span className="text-white/25">/3</span></span>
+              ) : (
+                <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{rank ?? '—'}</span>
+              )}
               <div className="flex flex-col justify-center gap-0.5 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
                 {top && <AchievementLine keys={player.badges} />}

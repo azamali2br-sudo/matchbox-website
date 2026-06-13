@@ -3,31 +3,31 @@
 // profiles, and the account dashboard so names/icons never drift.
 
 export type BadgeKey =
-  | 'champion' | 'challenger' | 'contender' | 'top5'
+  | 'champion' | 'challenger' | 'contender'
   | 'ironman' | 'perfect' | 'streak' | 'slayer' | 'rookie'
 
 export type BadgeDef = {
   key: BadgeKey
   label: string
-  icon: string
   tone: 'gold' | 'silver' | 'bronze' | 'orange' | 'cyan' | 'green' | 'red' | 'purple' | 'blue'
   desc: string
 }
 
+// No emoji — badges are colour-coded text, which reads cleaner and stays on
+// brand. Tone drives the colour everywhere (pill, row tint, caption, legend).
 export const BADGE_DEFS: Record<BadgeKey, BadgeDef> = {
-  champion:   { key: 'champion',   label: 'Champion',            icon: '🏆', tone: 'gold',   desc: 'Topped the board this month' },
-  challenger: { key: 'challenger', label: 'Challenger',          icon: '🥈', tone: 'silver', desc: 'Runner-up this month' },
-  contender:  { key: 'contender',  label: 'Contender',           icon: '🥉', tone: 'bronze', desc: '3rd place this month' },
-  top5:       { key: 'top5',       label: 'Top Five',            icon: '✦',  tone: 'orange', desc: 'Finished in the top five' },
-  ironman:    { key: 'ironman',    label: 'Iron Man',            icon: '🛡️', tone: 'cyan',   desc: 'Most matches played this month' },
-  perfect:    { key: 'perfect',    label: 'Perfect Month',       icon: '💯', tone: 'green',  desc: 'Won every match this month' },
-  streak:     { key: 'streak',     label: 'Hot Streak',          icon: '🔥', tone: 'red',    desc: 'Longest win streak this month' },
-  slayer:     { key: 'slayer',     label: 'Giant Slayer',        icon: '⚔️', tone: 'purple', desc: 'Biggest upset — beat a much stronger team' },
-  rookie:     { key: 'rookie',     label: 'Rookie of the Month', icon: '🌟', tone: 'blue',   desc: 'Best player in their debut month' },
+  champion:   { key: 'champion',   label: 'Champion',            tone: 'gold',   desc: 'Finished #1 on the board this month' },
+  challenger: { key: 'challenger', label: 'Challenger',          tone: 'silver', desc: 'Finished #2 — runner-up this month' },
+  contender:  { key: 'contender',  label: 'Contender',           tone: 'bronze', desc: 'Finished #3 this month' },
+  ironman:    { key: 'ironman',    label: 'Iron Man',            tone: 'cyan',   desc: 'Played the most matches this month' },
+  perfect:    { key: 'perfect',    label: 'Perfect Month',       tone: 'green',  desc: 'Won every match this month' },
+  streak:     { key: 'streak',     label: 'Hot Streak',          tone: 'red',    desc: 'Longest run of consecutive wins (3+)' },
+  slayer:     { key: 'slayer',     label: 'Giant Slayer',        tone: 'purple', desc: 'Biggest upset — beat a much stronger team' },
+  rookie:     { key: 'rookie',     label: 'Rookie of the Month', tone: 'blue',   desc: 'Best player in their debut month' },
 }
 
 export const BADGE_ORDER: BadgeKey[] = [
-  'champion', 'challenger', 'contender', 'top5', 'ironman', 'perfect', 'streak', 'slayer', 'rookie',
+  'champion', 'challenger', 'contender', 'ironman', 'perfect', 'streak', 'slayer', 'rookie',
 ]
 
 // tone → tailwind classes (text / subtle bg / border) — used by every badge pill.
