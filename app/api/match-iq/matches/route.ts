@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/admin-auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { titleCaseName } from '@/lib/format'
+import { getClosedMonths } from '@/lib/seasons'
+import { monthLabel } from '@/lib/leaderboard'
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
@@ -18,23 +20,32 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') ?? 'approved'
   const limit = parseInt(searchParams.get('limit') ?? '20')
+  const month = searchParams.get('month') // 'YYYY-MM' → scope to that calendar month
 
   if (status !== 'approved') {
     const guard = await requireAdmin(request)
     if (guard) return guard
   }
 
+  // Calendar-month bounds for an optional month filter (played_on is a date).
+  let monthStart: string | null = null
+  let nextMonthStart: string | null = null
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, mo] = month.split('-').map(Number)
+    monthStart = `${month}-01`
+    nextMonthStart = mo === 12 ? `${y + 1}-01-01` : `${y}-${String(mo + 1).padStart(2, '0')}-01`
+  }
+
+  const listQ = supabaseAdmin.from('matches').select(MATCH_SELECT).eq('status', status)
+  const countQ = supabaseAdmin.from('matches').select('id', { count: 'exact', head: true }).eq('status', status)
+  if (monthStart && nextMonthStart) {
+    listQ.gte('played_on', monthStart).lt('played_on', nextMonthStart)
+    countQ.gte('played_on', monthStart).lt('played_on', nextMonthStart)
+  }
+
   const [{ data, error }, { count }] = await Promise.all([
-    supabaseAdmin
-      .from('matches')
-      .select(MATCH_SELECT)
-      .eq('status', status)
-      .order('played_on', { ascending: false })
-      .limit(limit),
-    supabaseAdmin
-      .from('matches')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', status),
+    listQ.order('played_on', { ascending: false }).limit(limit),
+    countQ,
   ])
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -92,6 +103,12 @@ export async function POST(request: NextRequest) {
   // team1 / team2 are arrays of two ACCOUNT ids picked from the name search.
   if (!playedOn || !Array.isArray(team1) || !Array.isArray(team2) || team1.length !== 2 || team2.length !== 2) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  // A finished (closed) season is frozen — no new matches can be added to it.
+  const playedMonth = String(playedOn).slice(0, 7)
+  if ((await getClosedMonths()).has(playedMonth)) {
+    return NextResponse.json({ error: `${monthLabel(playedMonth)} is closed — matches can no longer be submitted for a finished season.` }, { status: 400 })
   }
   if (team1Score == null || team2Score == null) {
     return NextResponse.json({ error: 'Scores required' }, { status: 400 })

@@ -13,12 +13,20 @@ export async function GET(request: NextRequest) {
   if (q.length < 1) return NextResponse.json({ players: [] })
 
   const { supabaseAdmin } = await import('@/lib/supabase')
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from('accounts')
     .select('id, name')
     .ilike('name', `%${q}%`)
-    .order('name', { ascending: true })
-    .limit(10)
+
+  // Beta: any registered account can be picked (so pre-seeded regulars who
+  // haven't claimed their profile yet still work). At public launch, flip
+  // MATCH_IQ_VERIFIED_ONLY=true in Vercel so only accounts that have verified
+  // via magic-link can be added as players — closes the fake-account vector.
+  if (process.env.MATCH_IQ_VERIFIED_ONLY === 'true') {
+    query = query.not('verified_at', 'is', null)
+  }
+
+  const { data, error } = await query.order('name', { ascending: true }).limit(10)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ players: data ?? [] })

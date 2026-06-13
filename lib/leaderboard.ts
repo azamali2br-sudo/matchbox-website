@@ -5,7 +5,11 @@
 import { teamRating, calcNewRating, ELO_START } from '@/lib/elo'
 import type { BadgeKey } from '@/lib/badges'
 
-export const MAIN_DRAW_MIN = 3   // matches in window to be officially ranked
+// Matches a player needs IN THE WINDOW to be officially ranked (Main Draw);
+// fewer = Qualifying (visible, unranked). Kept at 3 for beta-scale volume —
+// raising it now would empty the board. Bump to 5 once a typical month has
+// ~30+ matches so a ranked spot means a real sample.
+export const MAIN_DRAW_MIN = 3
 const STREAK_MIN = 3             // wins in a row → Hot Streak
 const SLAYER_MIN = 12            // opponent strength gap → Giant Slayer
 

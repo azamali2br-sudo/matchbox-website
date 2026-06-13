@@ -19,12 +19,13 @@ type Player = {
   badges: BadgeKey[]
 }
 
-type MonthOpt = { value: string; label: string }
+type MonthOpt = { value: string; label: string; closed?: boolean }
 type ApiResp = {
   view: 'month' | 'all'
   month: string | null
   monthLabel: string
   availableMonths: MonthOpt[]
+  closed?: boolean
   mainDraw: Player[]
   qualifying: Player[]
   totalMatches: number
@@ -83,11 +84,16 @@ export default function MatchIQClient() {
       .finally(() => setLoading(false))
   }, [view, month])
 
+  // Recent Matches follows the selected period: all-time shows the latest
+  // across every season; a month view scopes to that month (resolved from the
+  // leaderboard response so "latest" lands on the right month).
+  const resolvedMonth = data?.month ?? null
   useEffect(() => {
-    fetch('/api/match-iq/matches?limit=15')
+    const qs = view === 'all' || !resolvedMonth ? 'limit=15' : `limit=50&month=${resolvedMonth}`
+    fetch(`/api/match-iq/matches?${qs}`)
       .then(r => r.json())
       .then(d => { setMatches(d.matches ?? []); setMatchRatings(d.matchRatings ?? {}); setTotalAllMatches(d.total ?? 0) })
-  }, [])
+  }, [view, resolvedMonth])
 
   return (
     <div className="min-h-screen bg-navy pt-28">
@@ -202,8 +208,19 @@ function Leaderboard({
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</span>
           </div>
         )}
+        {view === 'month' && data?.closed && (
+          <span className="font-poppins text-[10px] font-semibold uppercase tracking-wide text-green-400 border border-green-500/30 bg-green-500/10 rounded-full px-2.5 py-1">
+            ✓ Final
+          </span>
+        )}
+        {view === 'month' && activeMonth && (
+          <Link href={`/match-iq/season/${activeMonth}`}
+            className="font-poppins text-[11px] font-semibold text-orange/80 hover:text-orange border border-orange/25 hover:border-orange/50 rounded-full px-3 py-1.5">
+            Season recap ↗
+          </Link>
+        )}
         <p className="font-poppins text-white/30 text-xs ml-auto">
-          {view === 'all' ? 'Career ratings, all matches' : 'Resets to 60 each month'}
+          {view === 'all' ? 'Career ratings, all matches' : data?.closed ? 'Final standings — season closed' : 'Resets to 60 each month'}
         </p>
       </div>
 

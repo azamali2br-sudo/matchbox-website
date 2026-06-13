@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { teamRating, calcNewRating } from '@/lib/elo'
 import { requireAdmin } from '@/lib/admin-auth'
+import { getClosedMonths } from '@/lib/seasons'
+import { monthLabel } from '@/lib/leaderboard'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -16,6 +18,20 @@ export async function PATCH(
   if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
   const { action } = await request.json()
+
+  // A finished (closed) season is frozen. Approving a still-pending match into
+  // it — or rejecting one already counted in it — would change a final board,
+  // so both actions are blocked once the month is closed.
+  const { data: existingMatch } = await supabaseAdmin
+    .from('matches')
+    .select('played_on')
+    .eq('id', id)
+    .maybeSingle()
+  if (!existingMatch) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
+  const playedMonth = String(existingMatch.played_on).slice(0, 7)
+  if ((await getClosedMonths()).has(playedMonth)) {
+    return NextResponse.json({ error: `${monthLabel(playedMonth)} is closed — this match can no longer be approved or rejected.` }, { status: 400 })
+  }
 
   if (action === 'reject') {
     const { error } = await supabaseAdmin.from('matches').update({ status: 'rejected' }).eq('id', id)

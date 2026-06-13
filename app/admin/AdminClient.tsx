@@ -812,6 +812,91 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   )
 }
 
+type SeasonRow = { month: string; label: string; closed: boolean; closedAt: string | null; isCurrent: boolean }
+
+function SeasonsPanel() {
+  const [rows, setRows] = useState<SeasonRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const res = await fetch('/api/admin/match-iq/seasons')
+    const data = await res.json()
+    setRows(data.months ?? [])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function act(row: SeasonRow, action: 'close' | 'reopen') {
+    if (action === 'close') {
+      const warn = row.isCurrent
+        ? `${row.label} isn't over yet. Closing now freezes the standings as they stand and BLOCKS any more matches for this month. Continue?`
+        : `Freeze ${row.label} as final? The champion and badges become permanent and no more matches can be added or changed for this month.`
+      if (!confirm(warn)) return
+    } else {
+      if (!confirm(`Reopen ${row.label}? Standings will recompute live again and matches can be added/changed.`)) return
+    }
+    setBusy(row.month); setMsg(null)
+    const res = await fetch('/api/admin/match-iq/seasons', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month: row.month, action }),
+    })
+    const data = await res.json()
+    if (!res.ok) setMsg(data.error ?? 'Something went wrong')
+    else if (action === 'close') setMsg(`${row.label} frozen${data.champion ? ` · champion: ${data.champion}` : ''}`)
+    else setMsg(`${row.label} reopened`)
+    setBusy(null)
+    await load()
+  }
+
+  return (
+    <div className="mb-8 bg-navy-card border border-white/8 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-qaranta text-2xl text-white uppercase">Seasons</h2>
+        <button onClick={load} className="font-poppins text-xs text-orange border border-orange/30 hover:border-orange px-3 py-2 rounded-xl">↻ Refresh</button>
+      </div>
+      <p className="font-poppins text-white/35 text-xs mb-4">Freeze a finished month so its champion &amp; badges are final before you announce them. A frozen month can&apos;t take new matches.</p>
+      {msg && <p className="font-poppins text-xs text-orange mb-3">{msg}</p>}
+      {loading ? <Loading /> : rows.length === 0 ? (
+        <Empty title="No seasons yet" sub="Months appear here once matches are played." />
+      ) : (
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.month} className="flex items-center justify-between gap-3 bg-navy/40 border border-white/5 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-poppins text-white text-sm font-semibold">{r.label}</span>
+                {r.isCurrent && <span className="font-poppins text-[10px] uppercase tracking-wide text-white/40 border border-white/15 rounded-full px-2 py-0.5">In progress</span>}
+                {r.closed
+                  ? <span className="font-poppins text-[10px] uppercase tracking-wide text-green-400 border border-green-500/30 bg-green-500/10 rounded-full px-2 py-0.5">✓ Final</span>
+                  : <span className="font-poppins text-[10px] uppercase tracking-wide text-white/40 border border-white/15 rounded-full px-2 py-0.5">Open</span>}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link href={`/match-iq/season/${r.month}`} target="_blank"
+                  className="font-poppins text-xs text-white/40 hover:text-orange px-2 py-1.5">
+                  Recap ↗
+                </Link>
+                {r.closed ? (
+                  <button onClick={() => act(r, 'reopen')} disabled={busy === r.month}
+                    className="font-poppins text-xs text-white/50 border border-white/15 hover:border-white/40 hover:text-white/80 px-3 py-1.5 rounded-lg disabled:opacity-50">
+                    {busy === r.month ? '...' : 'Reopen'}
+                  </button>
+                ) : (
+                  <button onClick={() => act(r, 'close')} disabled={busy === r.month}
+                    className="font-poppins text-xs font-semibold text-orange border border-orange/30 hover:bg-orange hover:text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+                    {busy === r.month ? '...' : 'Freeze as final'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Empty({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="text-center py-16">
@@ -857,6 +942,8 @@ function MatchIQAdmin() {
 
   return (
     <div>
+      <SeasonsPanel />
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="font-qaranta text-2xl text-white uppercase">Pending Matches</h2>

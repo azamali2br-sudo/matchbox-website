@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getTodayStr } from '@/lib/constants'
-import { buildStandings, debutMonthMap, monthsWithMatches, monthLabel, type MatchRow } from '@/lib/leaderboard'
+import { buildStandings, debutMonthMap, monthsWithMatches, monthLabel } from '@/lib/leaderboard'
+import { loadMatchIqInputs, computeSeasonStandings, getClosedMonths, getSeasonSnapshot } from '@/lib/seasons'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -17,36 +18,35 @@ export async function GET(request: NextRequest) {
   const view = searchParams.get('view') === 'all' ? 'all' : 'month'
   const requestedMonth = searchParams.get('month')
 
-  const [{ data: allPlayers }, { data: rawMatches }] = await Promise.all([
-    supabase.from('players').select('id, name'),
-    supabase
-      .from('matches')
-      .select('id, played_on, created_at, team1_p1, team1_p2, team2_p1, team2_p2, team1_score, team2_score')
-      .eq('status', 'approved')
-      .order('played_on', { ascending: true })
-      .order('created_at', { ascending: true }),
+  const [{ nameById, allMatches }, closedMonths] = await Promise.all([
+    loadMatchIqInputs(),
+    getClosedMonths(),
   ])
-
-  const nameById: Record<string, string> = {}
-  for (const p of allPlayers ?? []) nameById[p.id] = (p.name ?? '').trim()
-  const allMatches = (rawMatches ?? []) as MatchRow[]
 
   const currentMonth = getTodayStr().slice(0, 7)
   const months = [...new Set([currentMonth, ...monthsWithMatches(allMatches)])].sort().reverse()
-  const availableMonths = months.map(ym => ({ value: ym, label: monthLabel(ym) }))
+  const availableMonths = months.map(ym => ({ value: ym, label: monthLabel(ym), closed: closedMonths.has(ym) }))
 
-  const debutMonth = debutMonthMap(allMatches)
-  const month = view === 'month' ? (requestedMonth || currentMonth) : null
-  const windowMatches = view === 'all' ? allMatches : allMatches.filter(m => m.played_on.slice(0, 7) === month)
+  // All-time view: always a live replay across every match (never frozen).
+  if (view === 'all') {
+    const debutMonth = debutMonthMap(allMatches)
+    const { mainDraw, qualifying } = buildStandings(allMatches, { nameById, debutMonth, month: null })
+    return NextResponse.json({
+      view, month: null, monthLabel: 'All Time', availableMonths, closed: false,
+      mainDraw, qualifying, totalMatches: allMatches.length, totalPlayers: mainDraw.length + qualifying.length,
+    })
+  }
 
-  const { mainDraw, qualifying } = buildStandings(windowMatches, { nameById, debutMonth, month })
+  // Monthly view: a closed month serves its frozen snapshot; an open month
+  // recomputes live as before.
+  const month = requestedMonth || currentMonth
+  if (closedMonths.has(month)) {
+    const snap = await getSeasonSnapshot(month)
+    if (snap) {
+      return NextResponse.json({ view, month, monthLabel: monthLabel(month), availableMonths, closed: true, ...snap })
+    }
+  }
 
-  return NextResponse.json({
-    view, month,
-    monthLabel: month ? monthLabel(month) : 'All Time',
-    availableMonths,
-    mainDraw, qualifying,
-    totalMatches: windowMatches.length,
-    totalPlayers: mainDraw.length + qualifying.length,
-  })
+  const live = computeSeasonStandings(month, nameById, allMatches)
+  return NextResponse.json({ view, month, monthLabel: monthLabel(month), availableMonths, closed: false, ...live })
 }
