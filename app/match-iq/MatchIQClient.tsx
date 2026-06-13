@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
 import { BADGE_DEFS, BADGE_ORDER, BADGE_TEXT, PLACEMENT_BADGES, sortBadges, type BadgeKey } from '@/lib/badges'
+import { standingOrder } from '@/lib/leaderboard'
 
 type Player = {
   id: string
@@ -83,20 +84,18 @@ const LEGEND_ENTRIES: { label: string; tone: Tone; desc: string }[] = [
 function BadgeLegend() {
   const [open, setOpen] = useState(false)
   return (
-    <div className="bg-navy-card border border-white/8 rounded-2xl">
+    <div className="bg-navy-card border border-white/8 rounded-2xl overflow-hidden">
       <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left">
-        <span className="font-poppins text-xs font-semibold text-white/70">
-          What do the badges mean? <span className="text-white/30 font-normal hidden sm:inline">Hot Streak, Iron Man, Giant Slayer…</span>
-        </span>
-        <span className={`text-white/40 text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 text-left hover:bg-white/[0.02] transition-colors">
+        <span className="font-poppins text-xs font-semibold text-white/70">What do the badges mean?</span>
+        <span className={`text-white/40 text-[10px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
-        <div className="border-t border-white/8 px-4 sm:px-5 py-4 grid sm:grid-cols-2 gap-x-6 gap-y-3">
+        <div className="border-t border-white/8 px-4 sm:px-6 py-5 grid sm:grid-cols-2 gap-x-10 gap-y-4">
           {LEGEND_ENTRIES.map(d => (
-            <div key={d.label} className="flex items-baseline gap-2">
-              <span className={`font-poppins text-xs font-semibold shrink-0 ${BADGE_TEXT[d.tone]}`}>{d.label}</span>
-              <span className="font-poppins text-white/40 text-[11px] leading-snug">— {d.desc}</span>
+            <div key={d.label}>
+              <span className={`font-poppins text-xs font-semibold ${BADGE_TEXT[d.tone]}`}>{d.label}</span>
+              <p className="font-poppins text-[11px] text-white/40 leading-relaxed mt-1">{d.desc}</p>
             </div>
           ))}
         </div>
@@ -217,7 +216,10 @@ function Leaderboard({
     const { col, dir } = sort
     const m = dir === 'desc' ? -1 : 1
     const val = (p: Player) => col === 'winRate' ? (p.winRate ?? -1) : col === 'avgOpp' ? (p.avgOpp ?? -1) : p[col]
-    return [...filtered].sort((a, b) => (val(a) - val(b)) * m || a.name.localeCompare(b.name))
+    // Ties fall back to the canonical standing order so the displayed order
+    // always matches the server-assigned rank (e.g. equal rating → higher avg
+    // opponent ranks first).
+    return [...filtered].sort((a, b) => (val(a) - val(b)) * m || standingOrder(a, b))
   }, [data, draw, search, sort])
 
   if (loading) {

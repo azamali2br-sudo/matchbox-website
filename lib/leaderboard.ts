@@ -49,6 +49,19 @@ export function monthLabel(ym: string): string {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
+// The ONE ordering rule — used for ranking, for picking award winners, and (via
+// import) by the client so the displayed order always matches the rank:
+// highest rating → on a tie, tougher schedule (higher average-opponent rating)
+// → more matches → more wins → name. Exported so it can't drift.
+type Rankable = { rating: number; avgOpp: number | null; matches: number; wins: number; name: string }
+export function standingOrder(a: Rankable, b: Rankable): number {
+  return b.rating - a.rating
+    || (b.avgOpp ?? 0) - (a.avgOpp ?? 0)
+    || b.matches - a.matches
+    || b.wins - a.wins
+    || a.name.localeCompare(b.name)
+}
+
 function simulate(matches: MatchRow[]): { state: Record<string, Stats>; log: MatchSnapshot[] } {
   const state: Record<string, Stats> = {}
   const log: MatchSnapshot[] = []
@@ -99,19 +112,14 @@ export function buildStandings(
     maxStreak: s.maxStreak, currentStreak: s.curStreak, rank: null, badges: [],
   }))
 
-  // Standing + tiebreak order — the single rule used for ranking AND for picking
-  // award winners: highest rating, then more matches, then more wins, then name.
-  const byStanding = (a: StandingPlayer, b: StandingPlayer) =>
-    b.rating - a.rating || b.matches - a.matches || b.wins - a.wins || (b.avgOpp ?? 0) - (a.avgOpp ?? 0) || a.name.localeCompare(b.name)
-
-  const mainDraw = all.filter(p => p.matches >= MAIN_DRAW_MIN).sort(byStanding)
-  const qualifying = all.filter(p => p.matches < MAIN_DRAW_MIN).sort(byStanding)
+  const mainDraw = all.filter(p => p.matches >= MAIN_DRAW_MIN).sort(standingOrder)
+  const qualifying = all.filter(p => p.matches < MAIN_DRAW_MIN).sort(standingOrder)
   mainDraw.forEach((p, i) => { p.rank = i + 1 })
 
   const byId = new Map(all.map(p => [p.id, p]))
   const matchById = new Map(matches.map(m => [m.id, m]))
   const give = (p: StandingPlayer | undefined, key: BadgeKey) => { if (p && !p.badges.includes(key)) p.badges.push(key) }
-  const pickOne = (cands: StandingPlayer[]) => [...cands].sort(byStanding)[0]
+  const pickOne = (cands: StandingPlayer[]) => [...cands].sort(standingOrder)[0]
 
   // Placement (top 3).
   give(mainDraw[0], 'champion')
