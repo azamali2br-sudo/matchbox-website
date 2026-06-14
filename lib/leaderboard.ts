@@ -35,11 +35,12 @@ export type StandingPlayer = {
   rank: number | null; badges: BadgeKey[]
 }
 
-// Pre-match snapshot of one match — the monthly ratings as they stood going in.
-// Used to show award context (who beat whom, at what ratings, why an upset).
+// Snapshot of one match from the replay — pre/post ratings as they truly stood
+// (play order), so every surface shows ratings consistent with the leaderboard
+// rather than the approval-order `rating_history` table.
 export type MatchSnapshot = {
   id: string; playedOn: string
-  team1: { id: string; pre: number }[]; team2: { id: string; pre: number }[]
+  team1: { id: string; pre: number; post: number }[]; team2: { id: string; pre: number; post: number }[]
   team1Avg: number; team2Avg: number
   team1Score: number; team2Score: number; team1Won: boolean
 }
@@ -75,14 +76,15 @@ function simulate(matches: MatchRow[]): { state: Record<string, Stats>; log: Mat
     const t1R = teamRating(t1[0].rating, t1[1].rating)
     const t2R = teamRating(t2[0].rating, t2[1].rating)
     const t1won = m.team1_score > m.team2_score
-    // Capture pre-match ratings BEFORE applying the result.
-    log.push({
+    // Capture pre-match ratings BEFORE applying the result (post set after).
+    const snap: MatchSnapshot = {
       id: m.id, playedOn: m.played_on,
-      team1: [{ id: m.team1_p1, pre: t1[0].rating }, { id: m.team1_p2, pre: t1[1].rating }],
-      team2: [{ id: m.team2_p1, pre: t2[0].rating }, { id: m.team2_p2, pre: t2[1].rating }],
+      team1: [{ id: m.team1_p1, pre: t1[0].rating, post: t1[0].rating }, { id: m.team1_p2, pre: t1[1].rating, post: t1[1].rating }],
+      team2: [{ id: m.team2_p1, pre: t2[0].rating, post: t2[0].rating }, { id: m.team2_p2, pre: t2[1].rating, post: t2[1].rating }],
       team1Avg: Math.round(t1R), team2Avg: Math.round(t2R),
       team1Score: m.team1_score, team2Score: m.team2_score, team1Won: t1won,
-    })
+    }
+    log.push(snap)
     const apply = (team: Stats[], myR: number, oppR: number, won: boolean) => {
       for (const p of team) {
         p.rating = calcNewRating(p.rating, won, myR, oppR, p.matches)
@@ -95,8 +97,24 @@ function simulate(matches: MatchRow[]): { state: Record<string, Stats>; log: Mat
     }
     apply(t1, t1R, t2R, t1won)
     apply(t2, t2R, t1R, !t1won)
+    snap.team1[0].post = t1[0].rating; snap.team1[1].post = t1[1].rating
+    snap.team2[0].post = t2[0].rating; snap.team2[1].post = t2[1].rating
   }
   return { state, log }
+}
+
+// A player's rating after each of their matches, in play order — for the
+// profile rating graph. Built from the replay so it matches the leaderboard
+// (the old graph read rating_history, which is in approval order and drifts
+// when matches are approved out of sequence).
+export function playerRatingSeries(matches: MatchRow[], playerId: string): { playedOn: string; rating: number }[] {
+  const { log } = simulate(matches)
+  const out: { playedOn: string; rating: number }[] = []
+  for (const s of log) {
+    const p = [...s.team1, ...s.team2].find(x => x.id === playerId)
+    if (p) out.push({ playedOn: s.playedOn, rating: p.post })
+  }
+  return out
 }
 
 export function buildStandings(

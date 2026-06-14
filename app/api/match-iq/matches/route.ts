@@ -3,8 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/admin-auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { titleCaseName } from '@/lib/format'
-import { getClosedMonths } from '@/lib/seasons'
-import { monthLabel } from '@/lib/leaderboard'
+import { getClosedMonths, loadMatchIqInputs } from '@/lib/seasons'
+import { monthLabel, replaySeason } from '@/lib/leaderboard'
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
@@ -52,19 +52,22 @@ export async function GET(request: NextRequest) {
 
   const matches = data ?? []
 
-  // Attach each player's pre-match rating so cards show what each side
-  // was rated walking in — not the post-match value (which leaks the result).
+  // Attach each player's pre-match rating from the REPLAY (true play order), not
+  // from rating_history (which is in approval order and shows the wrong number
+  // when matches are approved out of sequence). This keeps the cards consistent
+  // with the leaderboard/profile ratings.
   const matchRatings: Record<string, Record<string, number>> = {}
   if (status === 'approved' && matches.length > 0) {
-    const matchIds = matches.map((m: { id: string }) => m.id)
-    const { data: historyRows } = await supabaseAdmin
-      .from('rating_history')
-      .select('match_id, player_id, pre_rating')
-      .in('match_id', matchIds)
-
-    for (const row of historyRows ?? []) {
-      if (!matchRatings[row.match_id]) matchRatings[row.match_id] = {}
-      matchRatings[row.match_id][row.player_id] = row.pre_rating
+    const { allMatches } = await loadMatchIqInputs()
+    const windowMatches = monthStart && nextMonthStart
+      ? allMatches.filter(m => m.played_on >= monthStart! && m.played_on < nextMonthStart!)
+      : allMatches
+    const { log } = replaySeason(windowMatches)
+    for (const m of matches as { id: string }[]) {
+      const snap = log.get(m.id)
+      if (!snap) continue
+      matchRatings[m.id] = {}
+      for (const p of [...snap.team1, ...snap.team2]) matchRatings[m.id][p.id] = p.pre
     }
   }
 

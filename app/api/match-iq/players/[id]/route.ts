@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import {
   buildStandings, debutMonthMap, monthsWithMatches, monthLabel,
-  replaySeason, awardMatchIds, enrichMatches, type AwardMatch,
+  replaySeason, awardMatchIds, enrichMatches, playerRatingSeries, type AwardMatch,
 } from '@/lib/leaderboard'
 import { loadMatchIqInputs, getAllSnapshots } from '@/lib/seasons'
 import type { BadgeKey } from '@/lib/badges'
@@ -15,9 +15,8 @@ export async function GET(
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-  const [playerRes, historyRes, matchesRes, inputs, snapshots] = await Promise.all([
+  const [playerRes, matchesRes, inputs, snapshots] = await Promise.all([
     supabase.from('players').select('id, name, rating, wins, losses, created_at').eq('id', id).single(),
-    supabase.from('rating_history').select('rating, created_at').eq('player_id', id).order('created_at', { ascending: true }),
     supabase
       .from('matches')
       .select(`
@@ -44,6 +43,11 @@ export async function GET(
   // All-time standing for this player (rank, avg opp). Always a live replay.
   const allTimeStandings = buildStandings(allMatches, { nameById, debutMonth, month: null })
   const allRow = [...allTimeStandings.mainDraw, ...allTimeStandings.qualifying].find(p => p.id === id) ?? null
+
+  // Rating graph = the player's rating after each match, in true play order,
+  // from the replay (matches the header/leaderboard). created_at carries the
+  // play date so the existing graph keeps working.
+  const ratingHistory = playerRatingSeries(allMatches, id).map(s => ({ rating: s.rating, created_at: s.playedOn }))
 
   // Per-month badges → trophy case (newest first, only months they earned
   // something). Closed months read their FROZEN snapshot so the trophy case
@@ -76,7 +80,7 @@ export async function GET(
 
   return NextResponse.json({
     player,
-    ratingHistory: historyRes.data ?? [],
+    ratingHistory,
     matches: matchesRes.data ?? [],
     allTime: allRow ? { rank: allRow.rank, avgOpp: allRow.avgOpp, matches: allRow.matches } : null,
     trophyCase,
