@@ -27,7 +27,12 @@ export async function loadMatchIqInputs(): Promise<{ nameById: Record<string, st
       .from('matches')
       .select('id, played_on, created_at, team1_p1, team1_p2, team2_p1, team2_p2, team1_score, team2_score')
       .eq('status', 'approved')
+      // TRUE play order: the date, then the time-of-day it was actually played
+      // (start_time), then approval order only as a last-resort tiebreak. This
+      // is the single source of order for every rating (leaderboard, profile,
+      // cards, graph, awards) — so entry/approval order never affects ratings.
       .order('played_on', { ascending: true })
+      .order('start_time', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true }),
   ])
   const nameById: Record<string, string> = {}

@@ -44,7 +44,13 @@ export async function GET(request: NextRequest) {
   }
 
   const [{ data, error }, { count }] = await Promise.all([
-    listQ.order('played_on', { ascending: false }).limit(limit),
+    // Newest first by actual play time (date → start_time → entry), matching the
+    // play order the ratings use.
+    listQ
+      .order('played_on', { ascending: false })
+      .order('start_time', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(limit),
     countQ,
   ])
 
