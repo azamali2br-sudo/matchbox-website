@@ -60,7 +60,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
       <div className="min-h-screen bg-navy flex items-center justify-center pt-28">
         <div className="text-center">
           <p className="font-qaranta text-4xl text-white/20 uppercase mb-4">Player Not Found</p>
-          <Link href="/match-iq" className="font-poppins text-orange text-sm hover:underline">← Back to leaderboard</Link>
+          <Link href="/match-iq" className="font-poppins text-orange text-sm hover:underline">← Back to Match IQ</Link>
         </div>
       </div>
     )
@@ -73,7 +73,7 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
     <div className="min-h-screen bg-navy pt-28">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <Link href="/match-iq" className="inline-flex items-center gap-2 font-poppins text-white/40 text-sm hover:text-white/70 transition-colors mb-8">
-          ← Leaderboard
+          ← Match IQ
         </Link>
 
         {/* Player header */}

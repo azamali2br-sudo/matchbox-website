@@ -232,7 +232,7 @@ export default function SubmitMatchPage() {
           <p className="font-poppins text-white/30 text-xs mb-10">Usually approved within a few hours.</p>
           <div className="flex flex-col gap-3">
             <Link href="/match-iq" className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all">
-              View Leaderboard
+              View Rankings
             </Link>
             <button onClick={reset} className="font-poppins text-white/40 text-sm hover:text-white/70 transition-colors">
               Submit Another Match
@@ -252,7 +252,7 @@ export default function SubmitMatchPage() {
 
         <h1 className="font-qaranta text-5xl text-white uppercase mb-2">Submit <span className="text-orange">Match</span></h1>
         <p className="font-poppins text-white/40 text-sm mb-10">
-          Search and pick all 4 players, then enter the final score. Pending admin approval before ratings update.
+          Search and pick all 4 players, then enter the final score. Ratings update once an admin approves the match.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -426,7 +426,7 @@ export default function SubmitMatchPage() {
             disabled={submitting}
             className="w-full bg-orange hover:bg-orange-dark disabled:opacity-50 text-white font-poppins font-semibold text-sm py-4 rounded-full transition-all hover:shadow-xl hover:shadow-orange/30"
           >
-            {submitting ? 'Submitting...' : 'Submit Match for Review'}
+            {submitting ? 'Submitting…' : 'Submit Match for Review'}
           </button>
 
           <p className="font-poppins text-white/25 text-xs text-center leading-relaxed">

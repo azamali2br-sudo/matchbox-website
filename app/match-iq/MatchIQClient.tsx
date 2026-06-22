@@ -161,10 +161,10 @@ export default function MatchIQClient() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
           <div>
             <h1 className="font-qaranta text-5xl sm:text-6xl md:text-7xl text-white uppercase leading-none">
-              Match<span className="text-orange">IQ</span>
+              Match <span className="text-orange">IQ</span>
             </h1>
             <p className="font-poppins text-white/50 text-sm mt-3 max-w-md">
-              Pakistan&apos;s first padel Elo rating system. Every month resets to 60 — climb the board and earn your badges.
+              Pakistan&apos;s first padel Elo rating system. Your Skill Rating tracks your all-time level — the Monthly Cup resets each month for a fresh title race.
             </p>
           </div>
           <Link href="/match-iq/submit"
@@ -178,7 +178,7 @@ export default function MatchIQClient() {
           {[
             { label: 'Players this month', value: data?.totalPlayers || '—' },
             { label: 'Matches this month', value: data?.totalMatches || '—' },
-            { label: 'Starting Rating', value: 60 },
+            { label: 'Starting rating', value: 60 },
           ].map(s => (
             <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl px-3 py-4 sm:p-5">
               <div className="font-qaranta text-2xl sm:text-3xl text-orange leading-none">{s.value}</div>
