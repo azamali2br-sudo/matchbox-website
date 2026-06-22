@@ -536,6 +536,28 @@ function SkillSection({ title, subtitle, players, kind }: { title: string; subti
   )
 }
 
+// Collapsed by default (matches the BadgeLegend toggle) so it doesn't dominate
+// the board on load — the ratings should lead, not the explainer.
+function SkillIntro() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="bg-navy-card border border-white/8 rounded-2xl overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 text-left hover:bg-white/[0.02] transition-colors">
+        <span className="font-poppins text-xs font-semibold text-white/70">How does Skill Rating work?</span>
+        <span className={`text-white/40 text-[10px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="border-t border-white/8 px-4 sm:px-6 py-4">
+          <p className="font-poppins text-white/60 text-xs leading-relaxed">
+            Your all-time skill — it carries across months and never resets, so it&apos;s the number to use when you&apos;re finding a game. Ask the group for the level you want, e.g. &ldquo;need three 75+ players for 8&ndash;10PM at Matchbox&rdquo;. Needs 3+ matches to show.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolean }) {
   const [search, setSearch] = useState('')
   if (loading || !data) {
@@ -548,11 +570,7 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
 
   return (
     <div className="space-y-5">
-      <div className="bg-navy-card border border-white/8 rounded-2xl px-4 sm:px-5 py-4">
-        <p className="font-poppins text-white/60 text-xs leading-relaxed">
-          <span className="text-white font-semibold">All-time skill.</span> Carries across months — it never resets, so this is the number to use when you&apos;re finding a game. Ask the group for the level you want, e.g. &ldquo;need three 75+ players for 8&ndash;10PM at Matchbox&rdquo;.
-        </p>
-      </div>
+      <SkillIntro />
 
       <div className="relative sm:w-56">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player…"
