@@ -444,30 +444,95 @@ function rankColorFor(rank: number | null): string {
   return rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/30'
 }
 
-function SkillRow({ p, dormant }: { p: SkillPlayer; dormant?: boolean }) {
+type SkillKind = 'active' | 'dormant' | 'calibrating'
+// Same column set as the Monthly Cup table (LeaderTable).
+const SKILL_GRID = 'grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem]'
+
+function SkillColumnHeader() {
+  const head = 'font-poppins text-white/30 text-xs uppercase tracking-wider'
+  return (
+    <div className={`hidden sm:grid ${SKILL_GRID} gap-3 px-5 pb-1`}>
+      <div />
+      <span className={head}>Player</span>
+      <span className={`${head} text-right`}>Rating</span>
+      <span className={`${head} text-center`}>M</span>
+      <span className={`${head} text-center`}>W/L</span>
+      <span className={`${head} text-right`}>Win%</span>
+      <span className={`${head} text-right`}>Avg Opp</span>
+    </div>
+  )
+}
+
+function SkillRow({ p, kind }: { p: SkillPlayer; kind: SkillKind }) {
+  const dormant = kind === 'dormant'
+  const calibrating = kind === 'calibrating'
   // "top 100%" (the very last player) reads oddly, so the label is suppressed there.
-  const showPct = p.topPct !== null && p.topPct < 100
+  const showPct = !calibrating && p.topPct !== null && p.topPct < 100
+  const ratingColor = calibrating || dormant ? 'text-white/45' : 'text-orange'
+
+  // Sub-name caption: top-X% context (+ "last played" for dormant); none while calibrating.
+  const caption = (showPct || (dormant && p.daysIdle !== null)) ? (
+    <span className="font-poppins text-[11px] truncate min-w-0 block">
+      {showPct && <span className="text-orange/70">top {p.topPct}%</span>}
+      {showPct && dormant && p.daysIdle !== null && <span className="text-white/20 mx-1">·</span>}
+      {dormant && p.daysIdle !== null && <span className="text-white/40">last played {p.daysIdle}d ago</span>}
+    </span>
+  ) : null
+
+  const rankCell = calibrating
+    ? <span className="font-poppins text-[11px] font-semibold leading-none text-orange/70">{p.matches}<span className="text-white/25">/3</span></span>
+    : dormant
+      ? <span className="font-qaranta text-lg leading-none text-white/25">·</span>
+      : <span className={`font-qaranta text-lg leading-none ${rankColorFor(p.rank)}`}>{p.rank ?? '—'}</span>
+
   return (
     <Link href={`/match-iq/${p.id}`}
-      className="block bg-navy-card border border-white/8 rounded-2xl px-4 sm:px-5 py-3.5 hover:border-orange/30 transition-all group">
-      <div className="flex items-center gap-3">
-        <span className={`font-qaranta text-lg leading-none w-8 shrink-0 text-center ${dormant ? 'text-white/25' : rankColorFor(p.rank)}`}>
-          {dormant ? '·' : (p.rank ?? '—')}
-        </span>
+      className={`block bg-navy-card border ${calibrating ? 'border-white/5' : 'border-white/8'} rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 hover:border-orange/30 transition-all group`}>
+      {/* Mobile — all stats on one meta line */}
+      <div className="sm:hidden flex items-start gap-3">
+        <span className="w-7 shrink-0 text-center mt-0.5">{rankCell}</span>
         <div className="flex-1 min-w-0">
-          <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">{p.name}</p>
-          <p className="font-poppins text-white/40 text-[11px] mt-0.5">
-            {showPct && <span className="text-orange/70">top {p.topPct}%</span>}
-            {dormant && p.daysIdle !== null
-              ? <>{showPct && <span className="text-white/20 mx-1">·</span>}last played {p.daysIdle}d ago</>
-              : <>{showPct && <span className="text-white/20 mx-1">·</span>}{p.matches} {p.matches === 1 ? 'match' : 'matches'}</>}
+          <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{p.name}</p>
+          {caption && <div className="mt-0.5">{caption}</div>}
+          <p className="font-poppins text-white/40 text-[11px] mt-1">
+            <span>{p.matches} {p.matches === 1 ? 'match' : 'matches'}</span>
             <span className="text-white/20 mx-1">·</span>
             <span className="text-green-400">{p.wins}W</span> <span className="text-red-400/70">{p.losses}L</span>
+            {p.winRate !== null && <><span className="text-white/20 mx-1">·</span><span>{p.winRate}%</span></>}
+            {p.avgOpp !== null && <><span className="text-white/20 mx-1">·</span><span>opp {p.avgOpp}</span></>}
           </p>
         </div>
-        <span className={`font-qaranta text-2xl shrink-0 leading-none ${dormant ? 'text-white/45' : 'text-orange'}`}>{p.rating}</span>
+        <span className={`font-qaranta text-2xl shrink-0 leading-none ${ratingColor}`}>{p.rating}</span>
+      </div>
+
+      {/* Desktop — same columns as the Monthly Cup table */}
+      <div className={`hidden sm:grid ${SKILL_GRID} gap-3 items-center`}>
+        <div className="text-center">{rankCell}</div>
+        <div className="flex flex-col justify-center gap-0.5 min-w-0">
+          <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{p.name}</p>
+          {caption}
+        </div>
+        <span className={`font-qaranta text-xl text-right ${ratingColor}`}>{p.rating}</span>
+        <span className="font-poppins text-white/60 text-sm text-center font-medium">{p.matches}</span>
+        <span className="font-poppins text-xs text-center">
+          <span className="text-green-400">{p.wins}</span><span className="text-white/20 mx-1">/</span><span className="text-red-400/70">{p.losses}</span>
+        </span>
+        <span className="font-poppins text-white/45 text-xs text-right">{p.winRate !== null ? `${p.winRate}%` : '—'}</span>
+        <span className="font-poppins text-white/45 text-xs text-right">{p.avgOpp ?? '—'}</span>
       </div>
     </Link>
+  )
+}
+
+function SkillSection({ title, subtitle, players, kind }: { title: string; subtitle?: string; players: SkillPlayer[]; kind: SkillKind }) {
+  return (
+    <div className="space-y-2">
+      <div className="px-1">
+        <h3 className="font-poppins text-white/40 text-xs uppercase tracking-wider">{title}</h3>
+        {subtitle && <p className="font-poppins text-white/30 text-[11px] mt-0.5">{subtitle}</p>}
+      </div>
+      {players.map(p => <SkillRow key={p.id} p={p} kind={kind} />)}
+    </div>
   )
 }
 
@@ -485,7 +550,7 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
     <div className="space-y-5">
       <div className="bg-navy-card border border-white/8 rounded-2xl px-4 sm:px-5 py-4">
         <p className="font-poppins text-white/60 text-xs leading-relaxed">
-          <span className="text-white font-semibold">All-time skill.</span> Carries across months — it never resets, so this is the number to use when you&apos;re finding a game. Ask the group for the level you want, e.g. <span className="text-orange">&ldquo;70+&rdquo;</span>. Needs 3+ matches to show.
+          <span className="text-white font-semibold">All-time skill.</span> Carries across months — it never resets, so this is the number to use when you&apos;re finding a game. Ask the group for the level you want, e.g. &ldquo;need three 75+ players for 8&ndash;10PM at Matchbox&rdquo;.
         </p>
       </div>
 
@@ -501,43 +566,18 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
           <p className="font-poppins text-white/30 text-sm">{q ? 'Try a different name.' : 'Play 3+ matches to get a skill rating.'}</p>
         </div>
       ) : (
-        <>
-          {active.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="font-poppins text-white/40 text-xs uppercase tracking-wider px-1">Active</h3>
-              {active.map(p => <SkillRow key={p.id} p={p} />)}
-            </div>
-          )}
-
+        <div className="space-y-5">
+          <SkillColumnHeader />
+          {active.length > 0 && <SkillSection title="Active" players={active} kind="active" />}
           {dormant.length > 0 && (
-            <div className="space-y-2">
-              <div className="px-1">
-                <h3 className="font-poppins text-white/40 text-xs uppercase tracking-wider">Dormant</h3>
-                <p className="font-poppins text-white/30 text-[11px] mt-0.5">Haven&apos;t played in {data.dormantDays}+ days — rating kept, just off the live board. Nudge them back.</p>
-              </div>
-              {dormant.map(p => <SkillRow key={p.id} p={p} dormant />)}
-            </div>
+            <SkillSection title="Dormant" kind="dormant" players={dormant}
+              subtitle={`Haven't played in ${data.dormantDays}+ days — rating kept, just off the live board. Nudge them back.`} />
           )}
-
           {provisional.length > 0 && (
-            <div className="space-y-2">
-              <div className="px-1">
-                <h3 className="font-poppins text-white/40 text-xs uppercase tracking-wider">Calibrating</h3>
-                <p className="font-poppins text-white/30 text-[11px] mt-0.5">Under 3 matches — not rated for matchmaking yet.</p>
-              </div>
-              {provisional.map(p => (
-                <Link key={p.id} href={`/match-iq/${p.id}`}
-                  className="block bg-navy-card border border-white/5 rounded-2xl px-4 sm:px-5 py-3 hover:border-orange/20 transition-all group">
-                  <div className="flex items-center gap-3">
-                    <span className="font-poppins text-[11px] font-semibold text-orange/70 w-8 text-center shrink-0">{p.matches}<span className="text-white/25">/3</span></span>
-                    <p className="flex-1 min-w-0 font-poppins text-white/80 text-sm font-medium truncate group-hover:text-orange transition-colors">{p.name}</p>
-                    <span className="font-qaranta text-xl text-white/40 shrink-0">{p.rating}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <SkillSection title="Calibrating" kind="calibrating" players={provisional}
+              subtitle="Under 3 matches — not rated for matchmaking yet." />
           )}
-        </>
+        </div>
       )}
     </div>
   )
