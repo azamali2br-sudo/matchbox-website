@@ -106,7 +106,7 @@ function BadgeLegend() {
 
 // ── Main component ───────────────────────────────────────────────────────────
 export default function MatchIQClient() {
-  const [tab, setTab] = useState<'leaderboard' | 'skill' | 'matches'>('leaderboard')
+  const [tab, setTab] = useState<'leaderboard' | 'skill' | 'matches'>('skill')
   const [month, setMonth] = useState<string | null>(null) // null = latest
   const [data, setData] = useState<ApiResp | null>(null)
   const [loading, setLoading] = useState(true)
@@ -189,10 +189,10 @@ export default function MatchIQClient() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 w-fit mb-6">
-          {(['leaderboard', 'skill', 'matches'] as const).map(t => (
+          {(['skill', 'leaderboard', 'matches'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`font-poppins text-xs font-semibold px-3.5 sm:px-5 py-2.5 rounded-lg transition-all ${tab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
-              {t === 'leaderboard' ? 'This Month' : t === 'skill' ? 'Skill Rating' : 'Recent Matches'}
+              {t === 'leaderboard' ? 'Monthly Cup' : t === 'skill' ? 'Skill Rating' : 'Recent Matches'}
             </button>
           ))}
         </div>
