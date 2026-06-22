@@ -32,6 +32,9 @@ export type StandingPlayer = {
   // currentStreak = live run as of their last match (drives the live "Hot Streak"
   // indicator; resets to 0 on a loss).
   winRate: number | null; avgOpp: number | null; maxStreak: number; currentStreak: number
+  // Date (YYYY-MM-DD) of their most recent match in the window — drives the
+  // Active/Dormant split on the all-time skill board.
+  lastPlayedAt: string | null
   rank: number | null; badges: BadgeKey[]
 }
 
@@ -52,14 +55,14 @@ export function monthLabel(ym: string): string {
 
 // The ONE ordering rule — used for ranking, for picking award winners, and (via
 // import) by the client so the displayed order always matches the rank:
-// highest rating → on a tie, tougher schedule (higher average-opponent rating)
-// → more matches → more wins → name. Exported so it can't drift.
+// highest rating → on a tie, more matches played → more wins → tougher schedule
+// (higher average-opponent rating) → name. Exported so it can't drift.
 type Rankable = { rating: number; avgOpp: number | null; matches: number; wins: number; name: string }
 export function standingOrder(a: Rankable, b: Rankable): number {
   return b.rating - a.rating
-    || (b.avgOpp ?? 0) - (a.avgOpp ?? 0)
     || b.matches - a.matches
     || b.wins - a.wins
+    || (b.avgOpp ?? 0) - (a.avgOpp ?? 0)
     || a.name.localeCompare(b.name)
 }
 
@@ -127,7 +130,7 @@ export function buildStandings(
     wins: s.wins, losses: s.losses, matches: s.matches,
     winRate: s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : null,
     avgOpp: s.matches > 0 ? Math.round(s.oppSum / s.matches) : null,
-    maxStreak: s.maxStreak, currentStreak: s.curStreak, rank: null, badges: [],
+    maxStreak: s.maxStreak, currentStreak: s.curStreak, lastPlayedAt: s.lastPlayedAt, rank: null, badges: [],
   }))
 
   const mainDraw = all.filter(p => p.matches >= MAIN_DRAW_MIN).sort(standingOrder)
@@ -147,10 +150,6 @@ export function buildStandings(
   // Iron Man — most matches (single winner; ties broken by rating then matches).
   const maxMatches = Math.max(0, ...mainDraw.map(p => p.matches))
   if (maxMatches >= MAIN_DRAW_MIN) give(pickOne(mainDraw.filter(p => p.matches === maxMatches)), 'ironman')
-
-  // Perfect Month — unbeaten (single winner by the same tiebreak).
-  const unbeaten = mainDraw.filter(p => p.losses === 0)
-  if (unbeaten.length) give(pickOne(unbeaten), 'perfect')
 
   // Wildfire — longest win streak (single winner by the same tiebreak).
   const maxStreak = Math.max(0, ...mainDraw.map(p => p.maxStreak))
@@ -218,7 +217,6 @@ export function awardMatchIds(
     }
     return best
   }
-  if (badge === 'perfect') return mine.filter(won).map(m => m.id) // all (all wins)
   return mine.map(m => m.id) // champion/challenger/contender/ironman/rookie → all their matches
 }
 

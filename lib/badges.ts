@@ -4,7 +4,7 @@
 
 export type BadgeKey =
   | 'champion' | 'challenger' | 'contender'
-  | 'ironman' | 'perfect' | 'streak' | 'slayer' | 'rookie'
+  | 'ironman' | 'streak' | 'slayer' | 'rookie'
 
 export type BadgeDef = {
   key: BadgeKey
@@ -20,14 +20,13 @@ export const BADGE_DEFS: Record<BadgeKey, BadgeDef> = {
   challenger: { key: 'challenger', label: 'Challenger',          tone: 'silver', desc: 'Finished #2 — runner-up this month' },
   contender:  { key: 'contender',  label: 'Contender',           tone: 'bronze', desc: 'Finished #3 this month' },
   ironman:    { key: 'ironman',    label: 'Iron Man',            tone: 'cyan',   desc: 'Played the most matches this month' },
-  perfect:    { key: 'perfect',    label: 'Perfect Month',       tone: 'green',  desc: 'Won every match this month' },
   streak:     { key: 'streak',     label: 'Wildfire',            tone: 'red',    desc: 'Longest win streak of the month' },
   slayer:     { key: 'slayer',     label: 'Giant Slayer',        tone: 'purple', desc: 'Biggest upset — beat a much stronger team' },
   rookie:     { key: 'rookie',     label: 'Rookie of the Month', tone: 'blue',   desc: 'Best player in their debut month' },
 }
 
 export const BADGE_ORDER: BadgeKey[] = [
-  'champion', 'challenger', 'contender', 'ironman', 'perfect', 'streak', 'slayer', 'rookie',
+  'champion', 'challenger', 'contender', 'ironman', 'streak', 'slayer', 'rookie',
 ]
 
 // Placement badges are redundant on the live leaderboard (the rank column
