@@ -524,18 +524,6 @@ function SkillRow({ p, kind }: { p: SkillPlayer; kind: SkillKind }) {
   )
 }
 
-function SkillSection({ title, subtitle, players, kind }: { title: string; subtitle?: string; players: SkillPlayer[]; kind: SkillKind }) {
-  return (
-    <div className="space-y-2">
-      <div className="px-1">
-        <h3 className="font-poppins text-white/40 text-xs uppercase tracking-wider">{title}</h3>
-        {subtitle && <p className="font-poppins text-white/30 text-[11px] mt-0.5">{subtitle}</p>}
-      </div>
-      {players.map(p => <SkillRow key={p.id} p={p} kind={kind} />)}
-    </div>
-  )
-}
-
 // Collapsed by default (matches the BadgeLegend toggle) so it doesn't dominate
 // the board on load — the ratings should lead, not the explainer.
 function SkillIntro() {
@@ -559,42 +547,62 @@ function SkillIntro() {
 }
 
 function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolean }) {
+  const [view, setView] = useState<'active' | 'dormant' | 'new'>('active')
   const [search, setSearch] = useState('')
   if (loading || !data) {
     return <div className="space-y-3">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-navy-card rounded-2xl animate-pulse" />)}</div>
   }
   const q = search.trim().toLowerCase()
   const flt = (list: SkillPlayer[]) => (q ? list.filter(p => p.name.toLowerCase().includes(q)) : list)
-  const active = flt(data.active), dormant = flt(data.dormant), provisional = flt(data.provisional)
-  const empty = active.length + dormant.length + provisional.length === 0
+
+  // Three groups, toggled one at a time — mirrors the Monthly Cup Main Draw /
+  // Qualifying split so each is quick to scan.
+  const groups = {
+    active: { label: 'Active', kind: 'active' as SkillKind, all: data.active, subtitle: 'Played in the last 15 days — your live matchmaking pool.' },
+    dormant: { label: 'Dormant', kind: 'dormant' as SkillKind, all: data.dormant, subtitle: `Haven't played in ${data.dormantDays}+ days — rating kept, just off the live board. Nudge them back.` },
+    new: { label: 'New', kind: 'calibrating' as SkillKind, all: data.provisional, subtitle: 'Fewer than 3 matches — not rated for matchmaking yet.' },
+  }
+  const g = groups[view]
+  const shown = flt(g.all)
+  const emptyCopy = {
+    active: { head: 'No active players', sub: 'Rated players who played in the last 15 days appear here.' },
+    dormant: { head: 'Nobody dormant', sub: 'Everyone rated has played within the last 15 days.' },
+    new: { head: 'No new players', sub: 'Players with fewer than 3 matches appear here.' },
+  }[view]
 
   return (
     <div className="space-y-5">
       <SkillIntro />
 
-      <div className="relative sm:w-56">
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player…"
-          className="w-full font-poppins text-sm text-white placeholder-white/30 bg-navy-card border border-white/8 rounded-xl pl-9 pr-3 py-2.5 outline-none focus:border-orange/40" />
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">⌕</span>
+      {/* Group toggle + search (mirrors the Monthly Cup Main Draw / Qualifying split) */}
+      <div className="space-y-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-1 bg-navy-card border border-white/8 rounded-xl p-1">
+            {(['active', 'dormant', 'new'] as const).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={`font-poppins text-xs font-semibold px-3.5 sm:px-4 py-2 rounded-lg transition-all ${view === v ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
+                {groups[v].label} <span className="opacity-60">{groups[v].all.length}</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:ml-auto sm:w-56">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player…"
+              className="w-full font-poppins text-sm text-white placeholder-white/30 bg-navy-card border border-white/8 rounded-xl pl-9 pr-3 py-2.5 outline-none focus:border-orange/40" />
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">⌕</span>
+          </div>
+        </div>
+        <p className="font-poppins text-white/35 text-xs">{g.subtitle}</p>
       </div>
 
-      {empty ? (
+      {shown.length === 0 ? (
         <div className="text-center py-16 bg-navy-card border border-white/8 rounded-2xl">
-          <p className="font-qaranta text-3xl text-white/20 uppercase mb-2">{q ? 'No match' : 'No rated players yet'}</p>
-          <p className="font-poppins text-white/30 text-sm">{q ? 'Try a different name.' : 'Play 3+ matches to get a skill rating.'}</p>
+          <p className="font-qaranta text-3xl text-white/20 uppercase mb-2">{q ? 'No match' : emptyCopy.head}</p>
+          <p className="font-poppins text-white/30 text-sm">{q ? 'Try a different name.' : emptyCopy.sub}</p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-2">
           <SkillColumnHeader />
-          {active.length > 0 && <SkillSection title="Active" players={active} kind="active" />}
-          {dormant.length > 0 && (
-            <SkillSection title="Dormant" kind="dormant" players={dormant}
-              subtitle={`Haven't played in ${data.dormantDays}+ days — rating kept, just off the live board. Nudge them back.`} />
-          )}
-          {provisional.length > 0 && (
-            <SkillSection title="Calibrating" kind="calibrating" players={provisional}
-              subtitle="Under 3 matches — not rated for matchmaking yet." />
-          )}
+          {shown.map(p => <SkillRow key={p.id} p={p} kind={g.kind} />)}
         </div>
       )}
     </div>
