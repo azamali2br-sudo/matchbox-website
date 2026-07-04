@@ -34,6 +34,7 @@ type ApiResp = {
   totalPlayers: number
 }
 
+type MatchFilter = { month: string | null; date: string | null }
 type MatchPlayer = { id: string; name: string; rating: number }
 type SetScore = { t1: number; t2: number }
 type Match = {
@@ -138,14 +139,17 @@ export default function MatchIQClient() {
       .finally(() => setLoading(false))
   }, [month])
 
-  // Recent Matches scopes to the month resolved by the leaderboard response.
-  const resolvedMonth = data?.month ?? null
+  // Recent Matches has its own scope: all-time by default, narrowable to a
+  // month or an exact date (independent of the Monthly Cup's month picker).
+  const [matchFilter, setMatchFilter] = useState<MatchFilter>({ month: null, date: null })
   useEffect(() => {
-    const qs = resolvedMonth ? `limit=50&month=${resolvedMonth}` : 'limit=15'
+    const qs = matchFilter.date ? `limit=100&date=${matchFilter.date}`
+      : matchFilter.month ? `limit=100&month=${matchFilter.month}`
+      : 'limit=200'
     fetch(`/api/match-iq/matches?${qs}`)
       .then(r => r.json())
       .then(d => { setMatches(d.matches ?? []); setMatchRatings(d.matchRatings ?? {}); setTotalAllMatches(d.total ?? 0) })
-  }, [resolvedMonth])
+  }, [matchFilter])
 
   return (
     <div className="min-h-screen bg-navy pt-28">
@@ -201,7 +205,8 @@ export default function MatchIQClient() {
           ? <Leaderboard data={data} loading={loading} month={month} setMonth={setMonth} />
           : tab === 'skill'
             ? <SkillBoard data={skill} loading={skillLoading} />
-            : <RecentMatches key={resolvedMonth ?? 'all'} matches={matches} matchRatings={matchRatings} total={totalAllMatches} />}
+            : <RecentMatches matches={matches} matchRatings={matchRatings} total={totalAllMatches}
+                availableMonths={data?.availableMonths ?? []} filter={matchFilter} setFilter={setMatchFilter} />}
       </div>
     </div>
   )
@@ -633,19 +638,63 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
   )
 }
 
-// ── Recent matches (unchanged) ───────────────────────────────────────────────
-function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatings: Record<string, Record<string, number>>; total: number }) {
+// ── Recent matches ───────────────────────────────────────────────────────────
+function RecentMatches({ matches, matchRatings, total, availableMonths, filter, setFilter }: {
+  matches: Match[]; matchRatings: Record<string, Record<string, number>>; total: number
+  availableMonths: MonthOpt[]; filter: MatchFilter; setFilter: (f: MatchFilter) => void
+}) {
+  const filtered = filter.month !== null || filter.date !== null
+
+  // All-time by default; narrow to a month via the dropdown or an exact day via
+  // the date picker. Picking one clears the other so the active scope is always
+  // unambiguous.
+  const controls = (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <div className="relative">
+        <select
+          value={filter.month ?? ''}
+          onChange={e => setFilter({ month: e.target.value || null, date: null })}
+          className="appearance-none font-poppins text-xs font-semibold text-white bg-navy-card border border-white/8 rounded-xl pl-4 pr-9 py-2.5 cursor-pointer hover:border-white/20 focus:border-orange/40 outline-none">
+          <option value="" className="bg-navy">All time</option>
+          {availableMonths.map(m => <option key={m.value} value={m.value} className="bg-navy">{m.label}</option>)}
+        </select>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px]">▼</span>
+      </div>
+      <input
+        type="date"
+        value={filter.date ?? ''}
+        onChange={e => setFilter({ month: null, date: e.target.value || null })}
+        className="font-poppins text-xs font-semibold text-white bg-navy-card border border-white/8 rounded-xl px-4 py-2.5 cursor-pointer hover:border-white/20 focus:border-orange/40 outline-none [color-scheme:dark]"
+      />
+      {filtered && (
+        <button onClick={() => setFilter({ month: null, date: null })}
+          className="font-poppins text-[11px] font-semibold text-white/50 hover:text-orange border border-white/10 hover:border-orange/40 rounded-full px-3 py-1.5 transition-colors">
+          Clear ✕
+        </button>
+      )}
+      <p className="font-poppins text-white/30 text-xs ml-auto hidden sm:block">
+        {total} {total === 1 ? 'match' : 'matches'}
+      </p>
+    </div>
+  )
+
   if (matches.length === 0) {
     return (
-      <div className="text-center py-24">
-        <p className="font-qaranta text-4xl text-white/20 uppercase mb-3">No Matches Yet</p>
-        <p className="font-poppins text-white/30 text-sm">Approved matches will appear here.</p>
+      <div className="space-y-5">
+        {controls}
+        <div className="text-center py-24">
+          <p className="font-qaranta text-4xl text-white/20 uppercase mb-3">{filtered ? 'No Matches Here' : 'No Matches Yet'}</p>
+          <p className="font-poppins text-white/30 text-sm">
+            {filter.date ? 'Nothing was played on this date.' : filter.month ? 'Nothing was played this month.' : 'Approved matches will appear here.'}
+          </p>
+        </div>
       </div>
     )
   }
   return (
     <div className="space-y-3">
-      <ExpandableRows items={matches} noun="matches" render={match => {
+      {controls}
+      <ExpandableRows key={filter.date ?? filter.month ?? 'all'} items={matches} noun="matches" render={match => {
         const team1Won = match.team1_score > match.team2_score
         const ratings = matchRatings[match.id] ?? {}
         const r1 = Math.round(ratings[match.p1.id] ?? match.p1.rating)

@@ -21,24 +21,33 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') ?? 'approved'
   const limit = parseInt(searchParams.get('limit') ?? '20')
   const month = searchParams.get('month') // 'YYYY-MM' → scope to that calendar month
+  const dateParam = searchParams.get('date') // 'YYYY-MM-DD' → scope to that exact day
 
   if (status !== 'approved') {
     const guard = await requireAdmin(request)
     if (guard) return guard
   }
 
-  // Calendar-month bounds for an optional month filter (played_on is a date).
+  // A day filter implies its calendar month for the ratings replay, so the
+  // pre-match numbers on date-filtered cards match the Monthly Cup board.
+  const dayFilter = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null
+  const monthKey = dayFilter ? dayFilter.slice(0, 7) : month && /^\d{4}-\d{2}$/.test(month) ? month : null
+
+  // Calendar-month bounds (played_on is a date).
   let monthStart: string | null = null
   let nextMonthStart: string | null = null
-  if (month && /^\d{4}-\d{2}$/.test(month)) {
-    const [y, mo] = month.split('-').map(Number)
-    monthStart = `${month}-01`
+  if (monthKey) {
+    const [y, mo] = monthKey.split('-').map(Number)
+    monthStart = `${monthKey}-01`
     nextMonthStart = mo === 12 ? `${y + 1}-01-01` : `${y}-${String(mo + 1).padStart(2, '0')}-01`
   }
 
   const listQ = supabaseAdmin.from('matches').select(MATCH_SELECT).eq('status', status)
   const countQ = supabaseAdmin.from('matches').select('id', { count: 'exact', head: true }).eq('status', status)
-  if (monthStart && nextMonthStart) {
+  if (dayFilter) {
+    listQ.eq('played_on', dayFilter)
+    countQ.eq('played_on', dayFilter)
+  } else if (monthStart && nextMonthStart) {
     listQ.gte('played_on', monthStart).lt('played_on', nextMonthStart)
     countQ.gte('played_on', monthStart).lt('played_on', nextMonthStart)
   }
