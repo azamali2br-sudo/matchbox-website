@@ -209,6 +209,51 @@ export default function MatchIQClient() {
 
 // ── Leaderboard ──────────────────────────────────────────────────────────────
 type SortCol = 'rating' | 'matches' | 'wins' | 'losses' | 'winRate' | 'avgOpp'
+type SortState = { col: SortCol; dir: 'asc' | 'desc' }
+
+// Shared by the Monthly Cup and Skill Rating tables (same column set).
+const BOARD_GRID = 'grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem]'
+const SORT_COLS: { key: SortCol; label: string; align: string }[] = [
+  { key: 'rating', label: 'Rating', align: 'text-right' },
+  { key: 'matches', label: 'M', align: 'text-center' },
+  { key: 'wins', label: 'W/L', align: 'text-center' },
+  { key: 'winRate', label: 'Win%', align: 'text-right' },
+  { key: 'avgOpp', label: 'Avg Opp', align: 'text-right' },
+]
+
+// Sort controls: pills on mobile, clickable column headers on desktop.
+function SortControls({ sort, setSort }: { sort: SortState; setSort: (s: SortState) => void }) {
+  const toggle = (col: SortCol) => setSort(sort.col === col ? { col, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
+  const caret = (col: SortCol) => sort.col === col ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''
+  return (
+    <>
+      {/* Mobile sort control */}
+      <div className="sm:hidden flex items-center gap-2 mb-1">
+        <span className="font-poppins text-white/30 text-[11px] uppercase tracking-wider">Sort</span>
+        <div className="flex flex-wrap gap-1">
+          {SORT_COLS.map(c => (
+            <button key={c.key} onClick={() => toggle(c.key)}
+              className={`font-poppins text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${sort.col === c.key ? 'border-orange/40 text-orange bg-orange/10' : 'border-white/8 text-white/40'}`}>
+              {c.label}{caret(c.key)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop header */}
+      <div className={`hidden sm:grid ${BOARD_GRID} gap-3 px-5 pb-1`}>
+        <div />
+        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
+        {SORT_COLS.map(c => (
+          <button key={c.key} onClick={() => toggle(c.key)}
+            className={`font-poppins text-xs uppercase tracking-wider hover:text-white/70 transition-colors ${c.align} ${sort.col === c.key ? 'text-orange' : 'text-white/30'}`}>
+            {c.label}{caret(c.key)}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
 
 function Leaderboard({
   data, loading, month, setMonth,
@@ -321,44 +366,11 @@ function LeaderTable({
   players, provisional, isCurrentMonth, sort, setSort,
 }: {
   players: Player[]; provisional: boolean; isCurrentMonth: boolean
-  sort: { col: SortCol; dir: 'asc' | 'desc' }; setSort: (s: { col: SortCol; dir: 'asc' | 'desc' }) => void
+  sort: SortState; setSort: (s: SortState) => void
 }) {
-  const toggle = (col: SortCol) => setSort(sort.col === col ? { col, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' })
-  const caret = (col: SortCol) => sort.col === col ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''
-  const cols: { key: SortCol; label: string; align: string }[] = [
-    { key: 'rating', label: 'Rating', align: 'text-right' },
-    { key: 'matches', label: 'M', align: 'text-center' },
-    { key: 'wins', label: 'W/L', align: 'text-center' },
-    { key: 'winRate', label: 'Win%', align: 'text-right' },
-    { key: 'avgOpp', label: 'Avg Opp', align: 'text-right' },
-  ]
-
   return (
     <div className="space-y-2">
-      {/* Mobile sort control */}
-      <div className="sm:hidden flex items-center gap-2 mb-1">
-        <span className="font-poppins text-white/30 text-[11px] uppercase tracking-wider">Sort</span>
-        <div className="flex flex-wrap gap-1">
-          {cols.map(c => (
-            <button key={c.key} onClick={() => toggle(c.key)}
-              className={`font-poppins text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${sort.col === c.key ? 'border-orange/40 text-orange bg-orange/10' : 'border-white/8 text-white/40'}`}>
-              {c.label}{caret(c.key)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Desktop header */}
-      <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 px-5 pb-1">
-        <div />
-        <span className="font-poppins text-white/30 text-xs uppercase tracking-wider">Player</span>
-        {cols.map(c => (
-          <button key={c.key} onClick={() => toggle(c.key)}
-            className={`font-poppins text-xs uppercase tracking-wider hover:text-white/70 transition-colors ${c.align} ${sort.col === c.key ? 'text-orange' : 'text-white/30'}`}>
-            {c.label}{caret(c.key)}
-          </button>
-        ))}
-      </div>
+      <SortControls sort={sort} setSort={setSort} />
 
       {players.map(player => {
         const rank = player.rank
@@ -397,7 +409,7 @@ function LeaderTable({
             </div>
 
             {/* Desktop */}
-            <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem] gap-3 items-center">
+            <div className={`hidden sm:grid ${BOARD_GRID} gap-3 items-center`}>
               {provisional ? (
                 <span className="text-center font-poppins text-[11px] font-semibold leading-none text-orange/70">{player.matches}<span className="text-white/25">/3</span></span>
               ) : (
@@ -445,23 +457,6 @@ function rankColorFor(rank: number | null): string {
 }
 
 type SkillKind = 'active' | 'dormant' | 'calibrating'
-// Same column set as the Monthly Cup table (LeaderTable).
-const SKILL_GRID = 'grid-cols-[2.5rem_1fr_5rem_3.5rem_5rem_4.5rem_5rem]'
-
-function SkillColumnHeader() {
-  const head = 'font-poppins text-white/30 text-xs uppercase tracking-wider'
-  return (
-    <div className={`hidden sm:grid ${SKILL_GRID} gap-3 px-5 pb-1`}>
-      <div />
-      <span className={head}>Player</span>
-      <span className={`${head} text-right`}>Rating</span>
-      <span className={`${head} text-center`}>M</span>
-      <span className={`${head} text-center`}>W/L</span>
-      <span className={`${head} text-right`}>Win%</span>
-      <span className={`${head} text-right`}>Avg Opp</span>
-    </div>
-  )
-}
 
 function SkillRow({ p, kind }: { p: SkillPlayer; kind: SkillKind }) {
   const dormant = kind === 'dormant'
@@ -506,7 +501,7 @@ function SkillRow({ p, kind }: { p: SkillPlayer; kind: SkillKind }) {
       </div>
 
       {/* Desktop — same columns as the Monthly Cup table */}
-      <div className={`hidden sm:grid ${SKILL_GRID} gap-3 items-center`}>
+      <div className={`hidden sm:grid ${BOARD_GRID} gap-3 items-center`}>
         <div className="text-center">{rankCell}</div>
         <div className="flex flex-col justify-center gap-0.5 min-w-0">
           <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{p.name}</p>
@@ -549,11 +544,24 @@ function SkillIntro() {
 function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolean }) {
   const [view, setView] = useState<'active' | 'dormant' | 'new'>('active')
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortState>({ col: 'rating', dir: 'desc' })
+
+  const q = search.trim().toLowerCase()
+  const shown = useMemo(() => {
+    if (!data) return []
+    const list = view === 'active' ? data.active : view === 'dormant' ? data.dormant : data.provisional
+    const filtered = q ? list.filter(p => p.name.toLowerCase().includes(q)) : list
+    const { col, dir } = sort
+    const m = dir === 'desc' ? -1 : 1
+    const val = (p: SkillPlayer) => col === 'winRate' ? (p.winRate ?? -1) : col === 'avgOpp' ? (p.avgOpp ?? -1) : p[col]
+    // Ties fall back to the canonical standing order so the displayed order
+    // always matches the server-assigned rank (same rule as the Monthly Cup).
+    return [...filtered].sort((a, b) => (val(a) - val(b)) * m || standingOrder(a, b))
+  }, [data, view, q, sort])
+
   if (loading || !data) {
     return <div className="space-y-3">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 bg-navy-card rounded-2xl animate-pulse" />)}</div>
   }
-  const q = search.trim().toLowerCase()
-  const flt = (list: SkillPlayer[]) => (q ? list.filter(p => p.name.toLowerCase().includes(q)) : list)
 
   // Three groups, toggled one at a time — mirrors the Monthly Cup Main Draw /
   // Qualifying split so each is quick to scan.
@@ -563,7 +571,6 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
     new: { label: 'New', kind: 'calibrating' as SkillKind, all: data.provisional, subtitle: 'Fewer than 3 matches — not rated for matchmaking yet.' },
   }
   const g = groups[view]
-  const shown = flt(g.all)
   const emptyCopy = {
     active: { head: 'No active players', sub: 'Rated players who played in the last 15 days appear here.' },
     dormant: { head: 'Nobody dormant', sub: 'Everyone rated has played within the last 15 days.' },
@@ -601,7 +608,7 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
         </div>
       ) : (
         <div className="space-y-2">
-          <SkillColumnHeader />
+          <SortControls sort={sort} setSort={setSort} />
           {shown.map(p => <SkillRow key={p.id} p={p} kind={g.kind} />)}
         </div>
       )}
