@@ -15,7 +15,13 @@
 // teams keep the points they scored — an individual's tournament score is the
 // sum of their team's points across all their matches.
 
-export type AmericanoPlayer = { id: number; name: string }
+// joinedAtRound: rounds that already existed when the player was added (0 /
+// absent for founding players) — counts as sit-out credit so a late arrival
+// plays immediately instead of being benched first. active=false: the player
+// left; they keep their standings but are excluded from new rounds.
+export type AmericanoPlayer = { id: number; name: string; joinedAtRound?: number; active?: boolean }
+
+export const isActivePlayer = (p: AmericanoPlayer): boolean => p.active !== false
 export type AmericanoMatch = {
   court: number
   team1: [number, number]
@@ -36,6 +42,7 @@ export type Standing = {
   games: number
   satOut: number
   rank: number
+  active: boolean
 }
 
 export const FORMAT_LABEL = { americano: 'Americano', mexicano: 'Mexicano' } as const
@@ -87,7 +94,7 @@ function seededShuffle<T>(arr: T[], rand: () => number): T[] {
 export function computeStandings(players: AmericanoPlayer[], rounds: AmericanoRound[]): Standing[] {
   const by = new Map<number, Standing>()
   for (const p of players) {
-    by.set(p.id, { id: p.id, name: p.name, points: 0, wins: 0, losses: 0, draws: 0, games: 0, satOut: 0, rank: 0 })
+    by.set(p.id, { id: p.id, name: p.name, points: 0, wins: 0, losses: 0, draws: 0, games: 0, satOut: 0, rank: 0, active: isActivePlayer(p) })
   }
   for (const round of rounds) {
     for (const pid of round.sitOut) {
@@ -175,23 +182,27 @@ export function generateNextRound(
   courts: number,
   seedKey: string,
 ): AmericanoRound {
-  const n = players.length
+  // Only players currently in the tournament are drawn; leavers keep their
+  // standings but stop appearing in new rounds.
+  const eligible = players.filter(isActivePlayer)
+  const n = eligible.length
   const matchCount = Math.min(courts, Math.floor(n / 4))
   const playingCount = matchCount * 4
   const roundIndex = rounds.length
   const standings = computeStandings(players, rounds)
   const statFor = new Map(standings.map(s => [s.id, s]))
+  const eligibleSet = new Set(eligible.map(p => p.id))
 
-  // Pick sit-outs: fewest sit-outs so far leave first (then lowest id).
-  const sitOut: number[] = [...players]
-    .sort((a, b) => {
-      const sa = statFor.get(a.id)!.satOut - statFor.get(b.id)!.satOut
-      return sa !== 0 ? sa : a.id - b.id
-    })
+  // Pick sit-outs: fewest effective sit-outs leave first (then lowest id).
+  // Rounds missed before a late joiner arrived count as sit-out credit, so
+  // they get to play immediately instead of being benched on arrival.
+  const effectiveSat = (p: AmericanoPlayer) => statFor.get(p.id)!.satOut + (p.joinedAtRound ?? 0)
+  const sitOut: number[] = [...eligible]
+    .sort((a, b) => effectiveSat(a) - effectiveSat(b) || a.id - b.id)
     .slice(0, n - playingCount)
     .map(p => p.id)
   const sitSet = new Set(sitOut)
-  const active = players.filter(p => !sitSet.has(p.id)).map(p => p.id)
+  const active = eligible.filter(p => !sitSet.has(p.id)).map(p => p.id)
 
   const rand = mulberry32(hashSeed(`${seedKey}#${roundIndex}`))
   const counts = countHistory(rounds)
@@ -200,7 +211,7 @@ export function generateNextRound(
   if (format === 'mexicano' && roundIndex > 0) {
     // Standings-based courts: chunk the standings order into fours,
     // 1st & 4th vs 2nd & 3rd within each chunk.
-    const ordered = standings.filter(s => !sitSet.has(s.id)).map(s => s.id)
+    const ordered = standings.filter(s => eligibleSet.has(s.id) && !sitSet.has(s.id)).map(s => s.id)
     arrangement = []
     for (let c = 0; c < matchCount; c++) {
       const four = ordered.slice(c * 4, c * 4 + 4)

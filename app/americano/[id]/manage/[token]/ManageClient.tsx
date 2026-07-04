@@ -98,6 +98,9 @@ export default function ManageClient({ id, token }: { id: string; token: string 
 
         <TournamentView t={t} organizer={active ? organizer : undefined} />
 
+        {/* Player management — late arrivals join, leavers come off the draw */}
+        {active && <PlayersPanel t={t} act={act} busy={busy} />}
+
         {/* Round + completion controls */}
         {active && (
           <div className="mt-8 space-y-4">
@@ -170,6 +173,90 @@ export default function ManageClient({ id, token }: { id: string; token: string 
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Add players who show up late (they join the next draw immediately — the
+// rounds they missed count as sit-out credit) and remove players who leave
+// (they keep their points; they just stop being drawn).
+function PlayersPanel({ t, act, busy }: {
+  t: TournamentState
+  act: (body: Record<string, unknown>) => Promise<string | null>
+  busy: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+
+  const activeCount = t.players.filter(p => p.active !== false).length
+
+  const add = async () => {
+    if (!newName.trim()) return
+    setErr(null)
+    const e = await act({ action: 'addPlayer', name: newName })
+    if (e) setErr(e)
+    else setNewName('')
+  }
+  const setActive = async (playerId: number, activeFlag: boolean) => {
+    setErr(null)
+    const e = await act({ action: 'setPlayerActive', playerId, active: activeFlag })
+    if (e) setErr(e)
+  }
+
+  return (
+    <div className="mt-8 bg-navy-card border border-white/8 rounded-2xl overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 text-left hover:bg-white/[0.02] transition-colors">
+        <span className="font-poppins text-xs font-semibold text-white/70">
+          Manage players <span className="text-white/35">({activeCount} in the draw)</span>
+        </span>
+        <span className={`text-white/40 text-[10px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="border-t border-white/8 px-4 sm:px-5 py-4 space-y-4">
+          <p className="font-poppins text-white/35 text-xs leading-relaxed">
+            Changes apply from the next round you draw — rounds already on the board stay as they are.
+            A late joiner plays in the next draw; a removed player keeps their points but stops being drawn.
+          </p>
+
+          <div className="flex gap-2">
+            <input value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void add() }}
+              placeholder="Add a player who just arrived…"
+              className="flex-1 font-poppins text-sm text-white placeholder-white/30 bg-navy border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-orange/40" />
+            <button onClick={() => { void add() }} disabled={busy || !newName.trim()}
+              className="shrink-0 font-poppins text-xs font-semibold bg-orange hover:bg-orange-dark disabled:opacity-40 text-white rounded-xl px-5 py-2.5 transition-colors">
+              Add
+            </button>
+          </div>
+          {err && <p className="font-poppins text-red-400 text-xs">{err}</p>}
+
+          <div className="space-y-1.5">
+            {t.players.map(p => {
+              const isOut = p.active === false
+              return (
+                <div key={p.id} className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${isOut ? 'border-white/5 opacity-50' : 'border-white/8'}`}>
+                  <p className="flex-1 min-w-0 font-poppins text-sm text-white font-medium truncate">
+                    {p.name}
+                    {(p.joinedAtRound ?? 0) > 0 && (
+                      <span className="font-poppins text-white/30 text-[11px] font-normal ml-2">joined round {(p.joinedAtRound ?? 0) + 1}</span>
+                    )}
+                  </p>
+                  <button onClick={() => { void setActive(p.id, isOut) }} disabled={busy}
+                    className={`shrink-0 font-poppins text-[11px] font-semibold rounded-full px-3.5 py-1.5 border transition-colors disabled:opacity-50 ${
+                      isOut
+                        ? 'text-white/60 border-white/15 hover:border-orange/40 hover:text-orange'
+                        : 'text-red-400/70 border-red-500/20 hover:border-red-500/50 hover:text-red-400'
+                    }`}>
+                    {isOut ? 'Bring back' : 'Remove'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

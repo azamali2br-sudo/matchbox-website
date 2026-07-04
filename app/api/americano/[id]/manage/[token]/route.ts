@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
-import { generateNextRound, MAX_ROUNDS, type AmericanoRound } from '@/lib/americano'
+import {
+  generateNextRound, isActivePlayer, MAX_ROUNDS, MIN_PLAYERS, MAX_PLAYERS, MAX_PLAYER_NAME_LEN,
+  type AmericanoPlayer, type AmericanoRound,
+} from '@/lib/americano'
 import { publicProjection, type TournamentRow } from '../../../route'
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
@@ -47,6 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const rounds: AmericanoRound[] = t.rounds
+  const players: AmericanoPlayer[] = t.players
 
   if (body.action === 'score') {
     const r = Number(body.round)
@@ -69,7 +73,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (rounds.length >= MAX_ROUNDS) {
       return NextResponse.json({ error: `Round limit reached (${MAX_ROUNDS}).` }, { status: 400 })
     }
-    rounds.push(generateNextRound(t.format, t.players, rounds, t.courts, t.organizer_token))
+    if (players.filter(isActivePlayer).length < MIN_PLAYERS) {
+      return NextResponse.json({ error: `At least ${MIN_PLAYERS} active players are needed to draw a round.` }, { status: 400 })
+    }
+    rounds.push(generateNextRound(t.format, players, rounds, t.courts, t.organizer_token))
+  } else if (body.action === 'addPlayer') {
+    const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : ''
+    if (!name || name.length > MAX_PLAYER_NAME_LEN) {
+      return NextResponse.json({ error: `A name is required (max ${MAX_PLAYER_NAME_LEN} characters).` }, { status: 400 })
+    }
+    if (players.length >= MAX_PLAYERS) {
+      return NextResponse.json({ error: `Player limit reached (${MAX_PLAYERS}).` }, { status: 400 })
+    }
+    if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+      return NextResponse.json({ error: 'That name is already in the tournament — add a last initial.' }, { status: 400 })
+    }
+    const nextId = players.reduce((m, p) => Math.max(m, p.id), -1) + 1
+    // joinedAtRound credits the rounds they missed, so the newcomer plays
+    // in the next draw instead of being benched first.
+    players.push({ id: nextId, name, joinedAtRound: rounds.length })
+  } else if (body.action === 'setPlayerActive') {
+    const pid = Number(body.playerId)
+    const active = body.active === true
+    const player = players.find(p => p.id === pid)
+    if (!player) return NextResponse.json({ error: 'Unknown player.' }, { status: 400 })
+    player.active = active
   } else if (body.action === 'complete') {
     const scored = rounds.reduce((n, r) => n + r.matches.filter(m => m.score1 !== null).length, 0)
     if (scored === 0) {
@@ -79,7 +107,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
   }
 
-  const update: Record<string, unknown> = { rounds }
+  const update: Record<string, unknown> = { rounds, players }
   if (body.action === 'complete') {
     update.status = 'completed'
     update.completed_at = new Date().toISOString()

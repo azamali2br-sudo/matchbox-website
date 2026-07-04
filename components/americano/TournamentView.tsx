@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FORMAT_LABEL, tournamentDate, type AmericanoPlayer, type AmericanoRound, type Standing } from '@/lib/americano'
+import { FORMAT_LABEL, isActivePlayer, tournamentDate, type AmericanoPlayer, type AmericanoRound, type Standing } from '@/lib/americano'
 
 // The publicProjection shape from /api/americano — one type for every surface.
 export type TournamentState = {
@@ -45,8 +45,9 @@ function StandingsTable({ t }: { t: TournamentState }) {
       {t.standings.map(s => {
         const rankColor = s.rank === 1 ? 'text-yellow-400' : s.rank === 2 ? 'text-slate-300' : s.rank === 3 ? 'text-amber-600' : 'text-white/30'
         const record = anyDraws ? `${s.wins}–${s.draws}–${s.losses}` : `${s.wins}–${s.losses}`
+        const left = !s.active
         return (
-          <div key={s.id} className="bg-navy-card border border-white/8 rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4">
+          <div key={s.id} className={`bg-navy-card border border-white/8 rounded-2xl px-4 sm:px-5 py-3.5 sm:py-4 ${left ? 'opacity-50' : ''}`}>
             {/* Mobile */}
             <div className="sm:hidden flex items-center gap-3">
               <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center ${rankColor}`}>{s.rank}</span>
@@ -56,6 +57,7 @@ function StandingsTable({ t }: { t: TournamentState }) {
                   {s.games} {s.games === 1 ? 'game' : 'games'}
                   <span className="text-white/20 mx-1">·</span>
                   {record}
+                  {left && <><span className="text-white/20 mx-1">·</span>left</>}
                 </p>
               </div>
               <span className="font-qaranta text-2xl shrink-0 leading-none text-orange">{s.points}</span>
@@ -63,7 +65,10 @@ function StandingsTable({ t }: { t: TournamentState }) {
             {/* Desktop */}
             <div className="hidden sm:grid grid-cols-[2.5rem_1fr_5rem_4rem_5rem] gap-3 items-center">
               <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{s.rank}</span>
-              <p className="font-poppins text-white text-sm font-semibold truncate">{s.name}</p>
+              <p className="font-poppins text-white text-sm font-semibold truncate">
+                {s.name}
+                {left && <span className="font-poppins text-white/30 text-[11px] font-normal ml-2">left</span>}
+              </p>
               <span className="font-qaranta text-xl text-right text-orange">{s.points}</span>
               <span className="font-poppins text-white/60 text-sm text-center font-medium">{s.games}</span>
               <span className="font-poppins text-white/45 text-xs text-center">{record}</span>
@@ -210,7 +215,7 @@ export default function TournamentView({ t, organizer }: { t: TournamentState; o
           {tournamentDate(t.playedOn)}
           <span className="text-white/20 mx-1.5">·</span>{FORMAT_LABEL[t.format]}
           <span className="text-white/20 mx-1.5">·</span>{t.pointsPerMatch} points a match
-          <span className="text-white/20 mx-1.5">·</span>{t.players.length} players
+          <span className="text-white/20 mx-1.5">·</span>{t.players.filter(isActivePlayer).length} players
         </p>
       </div>
 
