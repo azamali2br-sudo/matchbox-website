@@ -47,8 +47,8 @@ export function tournamentDate(playedOn: string): string {
 
 export const POINTS_OPTIONS = [16, 21, 24, 32]
 export const MIN_PLAYERS = 4
-export const MAX_PLAYERS = 16
-export const MAX_COURTS = 4
+export const MAX_PLAYERS = 32
+export const MAX_COURTS = 8
 export const MAX_ROUNDS = 30
 export const MAX_NAME_LEN = 60
 export const MAX_PLAYER_NAME_LEN = 30

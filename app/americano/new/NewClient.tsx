@@ -99,7 +99,7 @@ export default function NewClient() {
               placeholder="Sunday Night Americano" className={inputCls} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Date</label>
               <input type="date" value={playedOn} onChange={e => setPlayedOn(e.target.value)}
