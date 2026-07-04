@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
 import { formatTime } from '@/lib/constants'
 import { BADGE_DEFS, BADGE_ORDER, BADGE_TEXT, PLACEMENT_BADGES, sortBadges, type BadgeKey } from '@/lib/badges'
@@ -201,7 +201,7 @@ export default function MatchIQClient() {
           ? <Leaderboard data={data} loading={loading} month={month} setMonth={setMonth} />
           : tab === 'skill'
             ? <SkillBoard data={skill} loading={skillLoading} />
-            : <RecentMatches matches={matches} matchRatings={matchRatings} total={totalAllMatches} />}
+            : <RecentMatches key={resolvedMonth ?? 'all'} matches={matches} matchRatings={matchRatings} total={totalAllMatches} />}
       </div>
     </div>
   )
@@ -220,6 +220,28 @@ const SORT_COLS: { key: SortCol; label: string; align: string }[] = [
   { key: 'winRate', label: 'Win%', align: 'text-right' },
   { key: 'avgOpp', label: 'Avg Opp', align: 'text-right' },
 ]
+
+// Long lists collapse past this many rows so the page stays scannable — the
+// rest expands in place via one button. Deliberately NOT an inner scrollbox:
+// nested scroll areas trap the thumb on mobile and hide how much content exists.
+const ROW_CAP = 10
+function ExpandableRows<T>({ items, render, noun }: {
+  items: T[]; render: (item: T) => ReactNode; noun: string
+}) {
+  const [expanded, setExpanded] = useState(false)
+  // Not worth hiding just a row or two behind a button.
+  const collapsible = items.length > ROW_CAP + 2
+  if (!collapsible) return <>{items.map(render)}</>
+  return (
+    <>
+      {(expanded ? items : items.slice(0, ROW_CAP)).map(render)}
+      <button onClick={() => setExpanded(e => !e)}
+        className="w-full font-poppins text-xs font-semibold text-white/50 hover:text-orange bg-navy-card border border-white/8 hover:border-orange/30 rounded-2xl py-3.5 transition-all">
+        {expanded ? 'Show less ▴' : `Show all ${items.length} ${noun} ▾`}
+      </button>
+    </>
+  )
+}
 
 // Sort controls: pills on mobile, clickable column headers on desktop.
 function SortControls({ sort, setSort }: { sort: SortState; setSort: (s: SortState) => void }) {
@@ -355,7 +377,7 @@ function Leaderboard({
           </p>
         </div>
       ) : (
-        <LeaderTable players={shown} provisional={draw === 'qualifying'} isCurrentMonth={isCurrentMonth} sort={sort} setSort={setSort} />
+        <LeaderTable key={`${draw}-${activeMonth ?? ''}`} players={shown} provisional={draw === 'qualifying'} isCurrentMonth={isCurrentMonth} sort={sort} setSort={setSort} />
       )}
     </div>
   )
@@ -372,7 +394,7 @@ function LeaderTable({
     <div className="space-y-2">
       <SortControls sort={sort} setSort={setSort} />
 
-      {players.map(player => {
+      <ExpandableRows items={players} noun="players" render={player => {
         const rank = player.rank
         const rankColor = provisional ? 'text-white/30'
           : rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-white/30'
@@ -429,7 +451,7 @@ function LeaderTable({
             </div>
           </Link>
         )
-      })}
+      }} />
     </div>
   )
 }
@@ -461,17 +483,11 @@ type SkillKind = 'active' | 'dormant' | 'calibrating'
 function SkillRow({ p, kind }: { p: SkillPlayer; kind: SkillKind }) {
   const dormant = kind === 'dormant'
   const calibrating = kind === 'calibrating'
-  // "top 100%" (the very last player) reads oddly, so the label is suppressed there.
-  const showPct = !calibrating && p.topPct !== null && p.topPct < 100
   const ratingColor = calibrating || dormant ? 'text-white/45' : 'text-orange'
 
-  // Sub-name caption: top-X% context (+ "last played" for dormant); none while calibrating.
-  const caption = (showPct || (dormant && p.daysIdle !== null)) ? (
-    <span className="font-poppins text-[11px] truncate min-w-0 block">
-      {showPct && <span className="text-orange/70">top {p.topPct}%</span>}
-      {showPct && dormant && p.daysIdle !== null && <span className="text-white/20 mx-1">·</span>}
-      {dormant && p.daysIdle !== null && <span className="text-white/40">last played {p.daysIdle}d ago</span>}
-    </span>
+  // Sub-name caption: "last played" for dormant; none otherwise.
+  const caption = dormant && p.daysIdle !== null ? (
+    <span className="font-poppins text-[11px] text-white/40 truncate min-w-0 block">last played {p.daysIdle}d ago</span>
   ) : null
 
   const rankCell = calibrating
@@ -609,7 +625,8 @@ function SkillBoard({ data, loading }: { data: SkillResp | null; loading: boolea
       ) : (
         <div className="space-y-2">
           <SortControls sort={sort} setSort={setSort} />
-          {shown.map(p => <SkillRow key={p.id} p={p} kind={g.kind} />)}
+          <ExpandableRows key={view} items={shown} noun="players"
+            render={p => <SkillRow key={p.id} p={p} kind={g.kind} />} />
         </div>
       )}
     </div>
@@ -628,7 +645,7 @@ function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatin
   }
   return (
     <div className="space-y-3">
-      {matches.map(match => {
+      <ExpandableRows items={matches} noun="matches" render={match => {
         const team1Won = match.team1_score > match.team2_score
         const ratings = matchRatings[match.id] ?? {}
         const r1 = Math.round(ratings[match.p1.id] ?? match.p1.rating)
@@ -677,7 +694,7 @@ function RecentMatches({ matches, matchRatings }: { matches: Match[]; matchRatin
             </div>
           </div>
         )
-      })}
+      }} />
     </div>
   )
 }
