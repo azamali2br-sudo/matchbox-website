@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { formatTime, formatDate, formatCurrency, getTodayStr, getDateStr, TIME_SLOTS, DURATION_OPTIONS, getTotalPrice } from '@/lib/constants'
 import type { Booking, Attendance } from '@/lib/mock-data'
 
-type AdminTab = 'today' | 'newbooking' | 'outstanding' | 'cancellations' | 'customers' | 'matchiq'
+type AdminTab = 'today' | 'newbooking' | 'outstanding' | 'cancellations' | 'customers' | 'matchiq' | 'americano'
 
 export default function AdminClient() {
   const [authed, setAuthed] = useState(false)
@@ -138,7 +138,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
         {/* Tab switcher */}
         <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 mb-6 overflow-x-auto">
-          {(['today', 'newbooking', 'outstanding', 'cancellations', 'customers', 'matchiq'] as AdminTab[]).map(t => (
+          {(['today', 'newbooking', 'outstanding', 'cancellations', 'customers', 'matchiq', 'americano'] as AdminTab[]).map(t => (
             <button
               key={t} onClick={() => setTab(t)}
               className={`font-poppins text-xs font-semibold px-4 py-2.5 rounded-lg transition-all whitespace-nowrap ${
@@ -150,12 +150,14 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                t === 'outstanding' ? 'Outstanding' :
                t === 'cancellations' ? 'Cancellations' :
                t === 'customers' ? 'Customers' :
-               'Match IQ'}
+               t === 'matchiq' ? 'Match IQ' :
+               'Americano'}
             </button>
           ))}
         </div>
 
-        {tab === 'matchiq' ? <MatchIQAdmin /> :
+        {tab === 'americano' ? <AmericanoAdmin /> :
+         tab === 'matchiq' ? <MatchIQAdmin /> :
          tab === 'newbooking' ? <NewBookingTab onCreated={() => { fetchAll(); setTab('today') }} /> :
          loading ? <Loading /> :
          tab === 'today' ? <TodayTab bookings={bookings} onUpdate={updateBooking} onRefresh={fetchAll} /> :
@@ -989,3 +991,127 @@ function MatchIQAdmin() {
   )
 }
 
+
+// ── Americano curation ────────────────────────────────────────────────────────
+// Every community-created tournament (they're unlisted by default). "Official"
+// features it on /leagues; "Hide" is the kill switch (page 404s for everyone,
+// organizer included).
+type AdminTournament = {
+  id: string; name: string; format: string; playedOn: string; status: string
+  playerCount: number; roundCount: number; isOfficial: boolean; isHidden: boolean; createdAt: string
+}
+
+function AmericanoAdmin() {
+  const [tournaments, setTournaments] = useState<AdminTournament[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/americano')
+      const data = await res.json()
+      setTournaments(data.tournaments ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  useEffect(() => { void load() }, [load])
+
+  const patch = async (id: string, body: { isOfficial?: boolean; isHidden?: boolean }) => {
+    setBusyId(id)
+    try {
+      const res = await fetch(`/api/admin/americano/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setTournaments(ts => ts.map(t => (t.id === id ? { ...t, ...body } : t)))
+      }
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  if (loading) return <Loading />
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="font-poppins text-white/40 text-xs">
+          {tournaments.length} {tournaments.length === 1 ? 'tournament' : 'tournaments'} — community-created events are
+          unlisted; mark one Official to feature it on the Leagues page.
+        </p>
+        <button onClick={() => { void load() }}
+          className="font-poppins text-xs font-semibold text-white/50 hover:text-orange border border-white/10 hover:border-orange/40 rounded-full px-4 py-2 transition-colors">
+          Refresh
+        </button>
+      </div>
+
+      {tournaments.length === 0 ? (
+        <div className="text-center py-16 bg-navy-card border border-white/8 rounded-2xl">
+          <p className="font-qaranta text-2xl text-white/20 uppercase mb-2">No tournaments yet</p>
+          <p className="font-poppins text-white/30 text-sm">Americanos created on the site will appear here.</p>
+        </div>
+      ) : (
+        tournaments.map(t => (
+          <div key={t.id} className={`bg-navy-card border rounded-2xl px-4 sm:px-5 py-4 ${t.isHidden ? 'border-red-500/30 opacity-60' : 'border-white/8'}`}>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a href={`/americano/${t.id}`} target="_blank" rel="noopener noreferrer"
+                    className="font-poppins text-white text-sm font-semibold hover:text-orange transition-colors truncate">
+                    {t.name}
+                  </a>
+                  <span className={`font-poppins text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 border ${
+                    t.status === 'completed'
+                      ? 'text-green-400 border-green-500/30 bg-green-500/10'
+                      : 'text-orange border-orange/30 bg-orange/10'
+                  }`}>
+                    {t.status === 'completed' ? 'Final' : 'Live'}
+                  </span>
+                  {t.isOfficial && (
+                    <span className="font-poppins text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 border text-yellow-400 border-yellow-500/30 bg-yellow-500/10">
+                      Official
+                    </span>
+                  )}
+                  {t.isHidden && (
+                    <span className="font-poppins text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 border text-red-400 border-red-500/30 bg-red-500/10">
+                      Hidden
+                    </span>
+                  )}
+                </div>
+                <p className="font-poppins text-white/35 text-xs mt-1">
+                  {formatDate(t.playedOn)} · {t.format === 'mexicano' ? 'Mexicano' : 'Americano'} · {t.playerCount} players · {t.roundCount} rounds
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => { void patch(t.id, { isOfficial: !t.isOfficial }) }}
+                  disabled={busyId === t.id}
+                  className={`font-poppins text-xs font-semibold rounded-full px-4 py-2 border transition-colors disabled:opacity-50 ${
+                    t.isOfficial
+                      ? 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20'
+                      : 'text-white/50 border-white/10 hover:border-yellow-500/40 hover:text-yellow-400'
+                  }`}>
+                  {t.isOfficial ? 'Unfeature' : 'Make official'}
+                </button>
+                <button
+                  onClick={() => { void patch(t.id, { isHidden: !t.isHidden }) }}
+                  disabled={busyId === t.id}
+                  className={`font-poppins text-xs font-semibold rounded-full px-4 py-2 border transition-colors disabled:opacity-50 ${
+                    t.isHidden
+                      ? 'text-white/60 border-white/20 hover:border-white/40'
+                      : 'text-red-400/80 border-red-500/25 hover:border-red-500/50 hover:text-red-400'
+                  }`}>
+                  {t.isHidden ? 'Unhide' : 'Hide'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}

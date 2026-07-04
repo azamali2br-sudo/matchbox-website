@@ -1,9 +1,51 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { supabaseAdmin } from '@/lib/supabase'
+import { computeStandings, FORMAT_LABEL, tournamentDate, type AmericanoPlayer, type AmericanoRound } from '@/lib/americano'
 
 export const metadata: Metadata = {
   title: 'Leagues & Tournaments | Matchbox Padel Club',
-  description: 'Matchbox Padel Club leagues and tournaments. 16-team inaugural league — Division 1 and Division 2. Register on WhatsApp.',
+  description: 'Matchbox Padel Club leagues and tournaments. Run a free Americano with our tournament organizer, or join the 16-team league.',
+}
+
+// The official-tournaments feed refreshes every minute.
+export const revalidate = 60
+
+type OfficialTournament = {
+  id: string
+  name: string
+  format: 'americano' | 'mexicano'
+  playedOn: string
+  status: 'active' | 'completed'
+  playerCount: number
+  champion: string | null
+}
+
+async function getOfficialTournaments(): Promise<OfficialTournament[]> {
+  const { data, error } = await supabaseAdmin
+    .from('americano_tournaments')
+    .select('id, name, format, played_on, status, players, rounds')
+    .eq('is_official', true)
+    .eq('is_hidden', false)
+    .order('played_on', { ascending: false })
+    .limit(12)
+  // Graceful degradation (e.g. table not migrated yet): section still renders
+  // with the create CTA, just without a feed.
+  if (error || !data) return []
+  return data.map(t => {
+    const players = t.players as AmericanoPlayer[]
+    const rounds = t.rounds as AmericanoRound[]
+    const standings = computeStandings(players, rounds)
+    return {
+      id: t.id as string,
+      name: t.name as string,
+      format: t.format as 'americano' | 'mexicano',
+      playedOn: t.played_on as string,
+      status: t.status as 'active' | 'completed',
+      playerCount: players.length,
+      champion: t.status === 'completed' && standings.length > 0 ? standings[0].name : null,
+    }
+  })
 }
 
 const FORMAT_STEPS = [
@@ -75,7 +117,8 @@ const FAQS = [
   },
 ]
 
-export default function LeaguesPage() {
+export default async function LeaguesPage() {
+  const tournaments = await getOfficialTournaments()
   return (
     <div className="min-h-screen bg-navy">
       {/* Hero */}
@@ -147,6 +190,91 @@ export default function LeaguesPage() {
           </div>
         </div>
       </div>
+
+      {/* Americano — free open tournament tool */}
+      <section className="bg-navy-dark py-24 md:py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="mb-14">
+            <p className="font-poppins text-orange text-xs font-semibold uppercase tracking-widest mb-4">Live Now — Free For Everyone</p>
+            <h2 className="font-qaranta text-4xl md:text-5xl lg:text-6xl text-white uppercase leading-tight">
+              Run Your Own<br />Americano
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Pitch + CTA */}
+            <div className="rounded-3xl border border-orange/30 bg-orange/5 p-8 md:p-10 flex flex-col">
+              <p className="font-poppins text-white/70 text-sm leading-relaxed mb-4">
+                Matchbox&apos;s free tournament organizer — for anyone, at any court. Enter your players and
+                we handle the rest: rotating partners, auto-drawn rounds, live standings everyone can
+                follow on their phones.
+              </p>
+              <ul className="space-y-2.5 mb-8">
+                {[
+                  'Americano and Mexicano formats',
+                  'No sign-up — create in under a minute',
+                  'Share one link, everyone sees live standings',
+                  'Fair sit-out rotation for odd player counts',
+                  'Finished tournaments are saved forever',
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2.5">
+                    <span className="w-4 h-4 rounded-full bg-orange/20 border border-orange/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange" />
+                    </span>
+                    <span className="font-poppins text-white/60 text-sm">{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/americano/new"
+                className="mt-auto inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all duration-200 hover:shadow-xl hover:shadow-orange/30">
+                Create a tournament
+              </Link>
+            </div>
+
+            {/* Official Matchbox events + history */}
+            <div className="rounded-3xl border border-white/8 bg-navy-card p-8 md:p-10">
+              <h3 className="font-qaranta text-2xl text-white uppercase mb-6">Matchbox Events</h3>
+              {tournaments.length === 0 ? (
+                <p className="font-poppins text-white/35 text-sm leading-relaxed">
+                  Official Matchbox Americano nights will appear here — champions and all.
+                  Watch the WhatsApp group for the first one.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {tournaments.map(t => (
+                    <Link key={t.id} href={`/americano/${t.id}`}
+                      className="block bg-navy border border-white/8 hover:border-orange/30 rounded-2xl px-5 py-4 transition-colors group">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-poppins text-white text-sm font-semibold truncate group-hover:text-orange transition-colors">{t.name}</p>
+                          <p className="font-poppins text-white/35 text-xs mt-1">
+                            {tournamentDate(t.playedOn)}
+                            <span className="text-white/15 mx-1.5">·</span>{FORMAT_LABEL[t.format]}
+                            <span className="text-white/15 mx-1.5">·</span>{t.playerCount} players
+                          </p>
+                          {t.champion && (
+                            <p className="font-poppins text-xs mt-1">
+                              <span className="text-white/35">Champion:</span>{' '}
+                              <span className="text-yellow-400 font-semibold">{t.champion}</span>
+                            </p>
+                          )}
+                        </div>
+                        <span className={`shrink-0 font-poppins text-[10px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 border ${
+                          t.status === 'completed'
+                            ? 'text-green-400 border-green-500/30 bg-green-500/10'
+                            : 'text-orange border-orange/30 bg-orange/10'
+                        }`}>
+                          {t.status === 'completed' ? 'Final' : 'Live'}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Divisions */}
       <section className="py-24 md:py-32">
