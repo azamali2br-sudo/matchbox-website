@@ -675,6 +675,9 @@ function RecentMatches({ matches, matchRatings, total, availableMonths, filter, 
       <p className="font-poppins text-white/30 text-xs ml-auto hidden sm:block">
         {total} {total === 1 ? 'match' : 'matches'}
       </p>
+      <p className="basis-full font-poppins text-white/30 text-xs">
+        Ratings on each card are what the players walked into that match with — check Skill Rating for where they stand now.
+      </p>
     </div>
   )
 
