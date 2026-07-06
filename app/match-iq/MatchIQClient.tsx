@@ -168,7 +168,11 @@ export default function MatchIQClient() {
               Match <span className="text-orange">IQ</span>
             </h1>
             <p className="font-poppins text-white/50 text-sm mt-3 max-w-md">
-              Pakistan&apos;s first padel Elo rating system. Your Skill Rating tracks your all-time level — the Monthly Cup resets each month for a fresh title race.
+              {tab === 'skill'
+                ? <>Pakistan&apos;s first padel Elo rating system. Your Skill Rating is your all-time level — it never resets, and it&apos;s the number to use when you&apos;re putting a game together.</>
+                : tab === 'leaderboard'
+                  ? <>The monthly title race. Everyone resets to 60 on the 1st — play 3+ matches to enter the Main Draw and chase the champion&apos;s crown.</>
+                  : <>Every approved match, newest first. The rating next to each name is what that player walked into the match with.</>}
             </p>
           </div>
           <Link href="/match-iq/submit"
