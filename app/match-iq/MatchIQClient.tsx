@@ -177,13 +177,24 @@ export default function MatchIQClient() {
           </Link>
         </div>
 
-        {/* Stats strip */}
+        {/* Stats strip — scope follows the active tab: Monthly Cup shows the
+            selected month, everything else shows all-time. */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-7">
-          {[
-            { label: 'Players this month', value: data?.totalPlayers || '—' },
-            { label: 'Matches this month', value: data?.totalMatches || '—' },
-            { label: 'Starting rating', value: 60 },
-          ].map(s => (
+          {(tab === 'leaderboard'
+            ? (() => {
+                const scope = data && !data.isCurrentMonth && data.monthLabel ? `in ${data.monthLabel}` : 'this month'
+                return [
+                  { label: `Players ${scope}`, value: data?.totalPlayers || '—' },
+                  { label: `Matches ${scope}`, value: data?.totalMatches || '—' },
+                  { label: 'Starting rating', value: 60 },
+                ]
+              })()
+            : [
+                { label: 'Players all time', value: skill?.totalPlayers || '—' },
+                { label: 'Matches all time', value: skill?.totalMatches || '—' },
+                { label: 'Starting rating', value: 60 },
+              ]
+          ).map(s => (
             <div key={s.label} className="bg-navy-card border border-white/8 rounded-2xl px-3 py-4 sm:p-5">
               <div className="font-qaranta text-2xl sm:text-3xl text-orange leading-none">{s.value}</div>
               <div className="font-poppins text-white/40 text-[11px] sm:text-xs mt-1.5">{s.label}</div>
