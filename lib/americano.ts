@@ -195,12 +195,14 @@ export function generateNextRound(
   const statFor = new Map(standings.map(s => [s.id, s]))
   const eligibleSet = new Set(eligible.map(p => p.id))
 
-  // Pick sit-outs: fewest effective sit-outs leave first (then lowest id).
+  // Pick sit-outs: fewest effective sit-outs leave first; ties go off in
+  // standings order, so the marginal court slots fall to the players lowest
+  // on the table (rank is unique, keeping draws deterministic).
   // Rounds missed before a late joiner arrived count as sit-out credit, so
   // they get to play immediately instead of being benched on arrival.
   const effectiveSat = (p: AmericanoPlayer) => statFor.get(p.id)!.satOut + (p.joinedAtRound ?? 0)
   const sitOut: number[] = [...eligible]
-    .sort((a, b) => effectiveSat(a) - effectiveSat(b) || a.id - b.id)
+    .sort((a, b) => effectiveSat(a) - effectiveSat(b) || statFor.get(a.id)!.rank - statFor.get(b.id)!.rank)
     .slice(0, n - playingCount)
     .map(p => p.id)
   const sitSet = new Set(sitOut)

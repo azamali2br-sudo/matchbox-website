@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import TournamentView, { type TournamentState, type OrganizerActions } from '@/components/americano/TournamentView'
 
-export default function ManageClient({ id, token }: { id: string; token: string }) {
+export default function ManageClient({ id, token, roundCap = null }: { id: string; token: string; roundCap?: number | null }) {
   const [t, setT] = useState<TournamentState | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -106,12 +106,20 @@ export default function ManageClient({ id, token }: { id: string; token: string 
           <div className="mt-8 space-y-4">
             {actionErr && <p className="font-poppins text-red-400 text-sm">{actionErr}</p>}
             <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={async () => { const e = await organizer.nextRound(); if (e) setActionErr(e) }}
-                disabled={busy}
-                className="flex-1 bg-orange hover:bg-orange-dark disabled:opacity-50 text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all">
-                {busy ? 'Working…' : `Draw round ${t.rounds.length + 1}`}
-              </button>
+              {roundCap !== null && t.rounds.length >= roundCap ? (
+                <div className="flex-1 border border-white/15 rounded-full px-8 py-4 text-center">
+                  <span className="font-poppins text-white/50 text-sm font-semibold">
+                    Round cap reached ({roundCap}) — enter any missing scores, then finish up.
+                  </span>
+                </div>
+              ) : (
+                <button
+                  onClick={async () => { const e = await organizer.nextRound(); if (e) setActionErr(e) }}
+                  disabled={busy}
+                  className="flex-1 bg-orange hover:bg-orange-dark disabled:opacity-50 text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all">
+                  {busy ? 'Working…' : `Draw round ${t.rounds.length + 1}${roundCap !== null ? ` of ${roundCap}` : ''}`}
+                </button>
+              )}
               <button
                 onClick={() => setConfirmComplete(true)}
                 disabled={busy}
