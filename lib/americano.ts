@@ -56,7 +56,9 @@ export const POINTS_OPTIONS = [16, 21, 24, 32]
 export const MIN_PLAYERS = 4
 export const MAX_PLAYERS = 32
 export const MAX_COURTS = 8
-export const MAX_ROUNDS = 30
+// High enough for a full partner rotation at big-group sizes on few courts
+// (e.g. 20 players / 2 courts needs ~48 rounds); still a runaway backstop.
+export const MAX_ROUNDS = 100
 export const MAX_NAME_LEN = 60
 export const MAX_PLAYER_NAME_LEN = 30
 
