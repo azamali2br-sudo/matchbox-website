@@ -23,6 +23,9 @@ export type TournamentRow = {
   is_hidden: boolean
   completed_at: string | null
   created_at: string
+  // Matches-per-player finish line; null = open-ended. Optional because the
+  // column arrives via the 2026-07-25 migration.
+  target_matches?: number | null
 }
 
 // Everything the public standings page needs — NEVER the organizer token.
@@ -39,6 +42,7 @@ export function publicProjection(t: TournamentRow) {
     rounds: t.rounds,
     isOfficial: t.is_official,
     completedAt: t.completed_at,
+    targetMatches: t.target_matches ?? null,
     standings: computeStandings(t.players, t.rounds),
   }
 }
@@ -115,25 +119,53 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Player names must be unique — add a last initial to tell duplicates apart.' }, { status: 400 })
   }
 
+  // Optional matches-per-player finish line. Any positive target works — when
+  // names.length × target isn't divisible by 4, the engine tops up the last
+  // round with the lowest-standing players, so 1–3 finish one match over.
+  let targetMatches: number | null = null
+  if (body.targetMatches !== undefined && body.targetMatches !== null) {
+    const t = Number(body.targetMatches)
+    if (!Number.isInteger(t) || t < 1 || t > 3 * (names.length - 1)) {
+      return NextResponse.json({ error: 'Invalid matches-per-player target.' }, { status: 400 })
+    }
+    targetMatches = t
+  }
+
   const players: AmericanoPlayer[] = names.map((n, i) => ({ id: i, name: n }))
   const organizerToken = randomBytes(24).toString('hex')
-  const round1 = generateNextRound(format, players, [], courts, organizerToken)
+  const round1 = generateNextRound(format, players, [], courts, organizerToken, targetMatches)
 
-  const { data, error } = await supabaseAdmin
-    .from('americano_tournaments')
-    .insert({
-      name,
-      format,
-      points_per_match: pointsPerMatch,
-      courts,
-      played_on: playedOn,
-      players,
-      rounds: [round1],
-      organizer_token: organizerToken,
-    })
-    .select('id')
-    .single()
+  const row: {
+    name: string
+    format: string
+    points_per_match: number
+    courts: number
+    played_on: string
+    players: AmericanoPlayer[]
+    rounds: AmericanoRound[]
+    organizer_token: string
+    target_matches?: number
+  } = {
+    name,
+    format,
+    points_per_match: pointsPerMatch,
+    courts,
+    played_on: playedOn,
+    players,
+    rounds: [round1],
+    organizer_token: organizerToken,
+  }
+  if (targetMatches !== null) row.target_matches = targetMatches
+  let insert = await supabaseAdmin.from('americano_tournaments').insert(row).select('id').single()
+  // Graceful degradation while the target_matches migration hasn't run:
+  // create the tournament open-ended rather than failing the organizer.
+  let targetSaved = targetMatches !== null
+  if (insert.error && targetMatches !== null && insert.error.message.includes('target_matches')) {
+    targetSaved = false
+    delete row.target_matches
+    insert = await supabaseAdmin.from('americano_tournaments').insert(row).select('id').single()
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ id: data.id, organizerToken })
+  if (insert.error) return NextResponse.json({ error: insert.error.message }, { status: 500 })
+  return NextResponse.json({ id: insert.data.id, organizerToken, targetSaved })
 }

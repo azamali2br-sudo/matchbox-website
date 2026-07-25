@@ -16,6 +16,7 @@ export type TournamentState = {
   rounds: AmericanoRound[]
   isOfficial: boolean
   completedAt: string | null
+  targetMatches: number | null
   standings: Standing[]
 }
 
@@ -216,6 +217,7 @@ export default function TournamentView({ t, organizer }: { t: TournamentState; o
           <span className="text-white/20 mx-1.5">·</span>{FORMAT_LABEL[t.format]}
           <span className="text-white/20 mx-1.5">·</span>{t.pointsPerMatch} points a match
           <span className="text-white/20 mx-1.5">·</span>{t.players.filter(isActivePlayer).length} players
+          {t.targetMatches !== null && <><span className="text-white/20 mx-1.5">·</span>to {t.targetMatches} matches each</>}
         </p>
       </div>
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  generateNextRound, isActivePlayer, MAX_ROUNDS, MIN_PLAYERS, MAX_PLAYERS, MAX_PLAYER_NAME_LEN,
+  generateNextRound, isActivePlayer, targetProgress, MAX_ROUNDS, MIN_PLAYERS, MAX_PLAYERS, MAX_PLAYER_NAME_LEN,
   type AmericanoPlayer, type AmericanoRound,
 } from '@/lib/americano'
 import { publicProjection, type TournamentRow } from '../../../route'
@@ -76,7 +76,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (players.filter(isActivePlayer).length < MIN_PLAYERS) {
       return NextResponse.json({ error: `At least ${MIN_PLAYERS} active players are needed to draw a round.` }, { status: 400 })
     }
-    rounds.push(generateNextRound(t.format, players, rounds, t.courts, t.organizer_token))
+    const target = t.target_matches ?? null
+    if (target !== null && targetProgress(players, rounds, target).totalNeed === 0) {
+      return NextResponse.json({ error: `Everyone has reached ${target} matches — enter any missing scores and mark the tournament completed.` }, { status: 400 })
+    }
+    rounds.push(generateNextRound(t.format, players, rounds, t.courts, t.organizer_token, target))
   } else if (body.action === 'addPlayer') {
     const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : ''
     if (!name || name.length > MAX_PLAYER_NAME_LEN) {

@@ -60,6 +60,57 @@ export const MAX_COURTS = 8
 // (e.g. 20 players / 2 courts needs ~48 rounds); still a runaway backstop.
 export const MAX_ROUNDS = 100
 export const MAX_NAME_LEN = 60
+
+// ── Tournament math (create-screen planner) ──────────────────────────────────
+// Pace calibrated on a real Matchbox night: 43 rounds of 16-point matches on
+// 2 courts took ~11.5 hours — roughly one minute per point of court time once
+// warm-up, rotation and score entry are included.
+export const MINUTES_PER_POINT = 1
+
+// A "true" Americano — every player partners every other player exactly once,
+// so everyone plays n−1 matches — needs n(n−1)/4 to be a whole number of
+// matches. Only player counts of 4k or 4k+1 qualify (8, 9, 12, 13, 16, 17…).
+export const isTrueAmericanoCount = (n: number): boolean => n % 4 === 0 || n % 4 === 1
+
+// Everyone finishing on exactly m matches consumes n·m player-slots, and each
+// match seats 4 — so an equal finish needs n·m divisible by 4. Other targets
+// still work, but 1–3 players (lowest on the table first) play one extra.
+export const isEqualFinishTarget = (n: number, m: number): boolean => (n * m) % 4 === 0
+
+export function totalMatchesFor(n: number, m: number): number {
+  return Math.ceil((n * m) / 4)
+}
+
+export function roundsFor(n: number, m: number, courts: number): number {
+  const perRound = Math.min(courts, Math.floor(n / 4))
+  return perRound > 0 ? Math.ceil(totalMatchesFor(n, m) / perRound) : 0
+}
+
+export function estimateMinutes(totalMatches: number, points: number, courts: number): number {
+  return Math.round((totalMatches * points * MINUTES_PER_POINT) / courts)
+}
+
+// Matches a player appears in across all drawn rounds — scored or not.
+export function countAppearances(players: AmericanoPlayer[], rounds: AmericanoRound[]): Map<number, number> {
+  const by = new Map<number, number>(players.map(p => [p.id, 0]))
+  for (const r of rounds) {
+    for (const m of r.matches) {
+      for (const pid of [...m.team1, ...m.team2]) by.set(pid, (by.get(pid) ?? 0) + 1)
+    }
+  }
+  return by
+}
+
+// Progress toward a matches-per-player target. Only active players carry
+// remaining need — leavers keep their appearances but stop counting.
+export function targetProgress(players: AmericanoPlayer[], rounds: AmericanoRound[], target: number): { appearances: Map<number, number>; totalNeed: number } {
+  const appearances = countAppearances(players, rounds)
+  let totalNeed = 0
+  for (const p of players) {
+    if (isActivePlayer(p)) totalNeed += Math.max(0, target - (appearances.get(p.id) ?? 0))
+  }
+  return { appearances, totalNeed }
+}
 export const MAX_PLAYER_NAME_LEN = 30
 
 // ── Seeded PRNG (mulberry32) — deterministic rounds for a given tournament ──
@@ -170,12 +221,42 @@ function bestSplit(four: number[], counts: PairCounts): { match: { team1: [numbe
   return best!
 }
 
+// Optimal court assignment for a small seated group: recursively anchor the
+// first remaining player, try every trio to join their court (bestSplit picks
+// the cheapest of the 3 pairings per court independently — penalties are
+// additive, so per-court optima compose into the global optimum for that
+// partition), and keep the cheapest complete arrangement. Deterministic.
+function bestArrangementExhaustive(ids: number[], counts: PairCounts): { arr: { team1: [number, number]; team2: [number, number] }[]; penalty: number } {
+  if (ids.length === 0) return { arr: [], penalty: 0 }
+  const [anchor, ...rest] = ids
+  let best: { arr: { team1: [number, number]; team2: [number, number] }[]; penalty: number } | null = null
+  for (let i = 0; i < rest.length - 2; i++) {
+    for (let j = i + 1; j < rest.length - 1; j++) {
+      for (let k = j + 1; k < rest.length; k++) {
+        const pick = bestSplit([anchor, rest[i], rest[j], rest[k]], counts)
+        if (best && pick.penalty >= best.penalty) continue
+        const remaining = rest.filter((_, idx) => idx !== i && idx !== j && idx !== k)
+        const sub = bestArrangementExhaustive(remaining, counts)
+        const total = pick.penalty + sub.penalty
+        if (!best || total < best.penalty) best = { arr: [pick.match, ...sub.arr], penalty: total }
+        if (best.penalty === 0) return best
+      }
+    }
+  }
+  return best!
+}
+
 /**
  * Generate the next round. Deterministic for a given (seedKey, prior rounds).
  *
- * Sit-outs: when players don't divide evenly into the available courts, the
- * players who have sat out least go off first (ties by id), so byes rotate
- * fairly through the tournament.
+ * Seating without a target: when players don't divide evenly into the
+ * available courts, the players who have sat out least go off first; ties go
+ * off in standings order so marginal slots fall to the lower-ranked players.
+ *
+ * Seating with a target (matches per player): the most-behind players are
+ * seated first, the round shrinks near the finish line so nobody overshoots
+ * needlessly, and any spare seats go to the lowest-standing finished players
+ * — bonus court time flows to the bottom of the table.
  */
 export function generateNextRound(
   format: AmericanoFormat,
@@ -183,28 +264,45 @@ export function generateNextRound(
   rounds: AmericanoRound[],
   courts: number,
   seedKey: string,
+  targetMatches?: number | null,
 ): AmericanoRound {
   // Only players currently in the tournament are drawn; leavers keep their
   // standings but stop appearing in new rounds.
   const eligible = players.filter(isActivePlayer)
   const n = eligible.length
-  const matchCount = Math.min(courts, Math.floor(n / 4))
-  const playingCount = matchCount * 4
   const roundIndex = rounds.length
   const standings = computeStandings(players, rounds)
   const statFor = new Map(standings.map(s => [s.id, s]))
   const eligibleSet = new Set(eligible.map(p => p.id))
 
-  // Pick sit-outs: fewest effective sit-outs leave first; ties go off in
-  // standings order, so the marginal court slots fall to the players lowest
-  // on the table (rank is unique, keeping draws deterministic).
   // Rounds missed before a late joiner arrived count as sit-out credit, so
   // they get to play immediately instead of being benched on arrival.
   const effectiveSat = (p: AmericanoPlayer) => statFor.get(p.id)!.satOut + (p.joinedAtRound ?? 0)
-  const sitOut: number[] = [...eligible]
-    .sort((a, b) => effectiveSat(a) - effectiveSat(b) || statFor.get(a.id)!.rank - statFor.get(b.id)!.rank)
-    .slice(0, n - playingCount)
-    .map(p => p.id)
+
+  let matchCount: number
+  let sitOut: number[]
+  if (targetMatches != null) {
+    const appearances = countAppearances(players, rounds)
+    const need = (p: AmericanoPlayer) => Math.max(0, targetMatches - (appearances.get(p.id) ?? 0))
+    const totalNeed = eligible.reduce((s, p) => s + need(p), 0)
+    matchCount = Math.min(courts, Math.floor(n / 4), Math.max(1, Math.ceil(totalNeed / 4)))
+    const seated = [...eligible]
+      .sort((a, b) =>
+        need(b) - need(a) ||
+        effectiveSat(b) - effectiveSat(a) ||
+        statFor.get(b.id)!.rank - statFor.get(a.id)!.rank)
+      .slice(0, matchCount * 4)
+    const seatedSet = new Set(seated.map(p => p.id))
+    sitOut = eligible.filter(p => !seatedSet.has(p.id)).map(p => p.id)
+  } else {
+    matchCount = Math.min(courts, Math.floor(n / 4))
+    // Fewest effective sit-outs leave first; ties go off in standings order
+    // (rank is unique, keeping draws deterministic).
+    sitOut = [...eligible]
+      .sort((a, b) => effectiveSat(a) - effectiveSat(b) || statFor.get(a.id)!.rank - statFor.get(b.id)!.rank)
+      .slice(0, n - matchCount * 4)
+      .map(p => p.id)
+  }
   const sitSet = new Set(sitOut)
   const active = eligible.filter(p => !sitSet.has(p.id)).map(p => p.id)
 
@@ -221,11 +319,17 @@ export function generateNextRound(
       const four = ordered.slice(c * 4, c * 4 + 4)
       arrangement.push({ team1: [four[0], four[3]], team2: [four[1], four[2]] })
     }
+  } else if (roundIndex > 0 && active.length <= 12) {
+    // Americano with up to 3 courts in play: exhaustively enumerate every way
+    // to split the seated players into courts of four (12 seated = 5,775
+    // partitions) and take the arrangement with the fewest repeat
+    // partners/opponents. Repeats only happen when history forces them.
+    arrangement = bestArrangementExhaustive(active, counts).arr
   } else {
-    // Americano (and Mexicano round 1): search seeded shuffles for the
-    // arrangement with the fewest repeat partners/opponents.
+    // Round 1 (seeded variety) and big rounds (13+ seated): search seeded
+    // shuffles for the arrangement with the fewest repeat partners/opponents.
     let best: { arr: { team1: [number, number]; team2: [number, number] }[]; penalty: number } | null = null
-    const attempts = roundIndex === 0 ? 1 : 250
+    const attempts = roundIndex === 0 ? 1 : 400
     for (let t = 0; t < attempts; t++) {
       const shuffled = seededShuffle(active, rand)
       const arr: { team1: [number, number]; team2: [number, number] }[] = []
