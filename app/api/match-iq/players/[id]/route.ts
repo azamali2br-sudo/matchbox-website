@@ -54,7 +54,7 @@ export async function GET(
   // matches the final, announced board; open months recompute live. When the
   // player won Giant Slayer that month, attach the upset match for context.
   const trophyCase: {
-    month: string; monthLabel: string; rank: number | null; badges: BadgeKey[]
+    month: string; monthLabel: string; rank: number | null; rating: number | null; badges: BadgeKey[]
     final: boolean; slayerMatch: AwardMatch | null
   }[] = []
   for (const ym of monthsWithMatches(allMatches)) {
@@ -68,7 +68,7 @@ export async function GET(
         const { log, upsetMatchByPlayer } = replaySeason(monthMatches)
         slayerMatch = enrichMatches(awardMatchIds('slayer', id, monthMatches, upsetMatchByPlayer), log, nameById)[0] ?? null
       }
-      trophyCase.push({ month: ym, monthLabel: monthLabel(ym), rank: row.rank, badges: row.badges, final: !!snap, slayerMatch })
+      trophyCase.push({ month: ym, monthLabel: monthLabel(ym), rank: row.rank, rating: Math.round(row.rating), badges: row.badges, final: !!snap, slayerMatch })
     }
   }
 

@@ -18,7 +18,7 @@ type Match = {
   set_scores: SetScore[] | null
   p1: MatchPlayer; p2: MatchPlayer; p3: MatchPlayer; p4: MatchPlayer
 }
-type TrophyMonth = { month: string; monthLabel: string; rank: number | null; badges: BadgeKey[]; slayerMatch?: AwardMatch | null }
+type TrophyMonth = { month: string; monthLabel: string; rank: number | null; rating?: number | null; badges: BadgeKey[]; final?: boolean; slayerMatch?: AwardMatch | null }
 type AllTime = { rank: number | null; avgOpp: number | null; matches: number }
 
 export default function PlayerPage({ params }: { params: Promise<{ playerId: string }> }) {
@@ -94,7 +94,8 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
             </div>
             <div className="text-right shrink-0">
               <div className="font-qaranta text-4xl sm:text-5xl md:text-6xl text-orange">{Math.round(player.rating)}</div>
-              <div className="font-poppins text-white/40 text-xs uppercase tracking-widest mt-1">Rating</div>
+              <div className="font-poppins text-white/40 text-xs uppercase tracking-widest mt-1">Skill Rating</div>
+              <div className="font-poppins text-white/25 text-[10px] mt-0.5">all-time · never resets</div>
             </div>
           </div>
 
@@ -118,25 +119,35 @@ export default function PlayerPage({ params }: { params: Promise<{ playerId: str
           <div className="bg-navy-card border border-white/8 rounded-3xl p-5 sm:p-8 mb-6">
             <h2 className="font-poppins text-white/50 text-xs uppercase tracking-widest mb-5">Trophy Case</h2>
             <div className="space-y-3.5">
-              {trophyCase.map(t => (
-                <div key={t.month}>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <span className="font-poppins text-white/45 text-xs sm:w-28 shrink-0">{t.monthLabel}</span>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {sortBadges(t.badges).map(k => {
-                        const d = BADGE_DEFS[k]
-                        return (
-                          <span key={k} title={d.desc}
-                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
-                            {d.label}
+              {trophyCase.map(t => {
+                const inProgress = t.final === false
+                return (
+                  <div key={t.month}>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                      <div className="sm:w-28 shrink-0">
+                        <span className="font-poppins text-white/45 text-xs block">{t.monthLabel}</span>
+                        {t.rating != null && (
+                          <span className={`font-poppins text-[11px] block mt-0.5 ${inProgress ? 'text-orange/60' : 'text-white/25'}`}>
+                            {inProgress ? `in progress · at ${t.rating}` : `finished at ${t.rating}`}
                           </span>
-                        )
-                      })}
+                        )}
+                      </div>
+                      <div className={`flex flex-wrap items-center gap-1.5 ${inProgress ? 'opacity-75' : ''}`}>
+                        {sortBadges(t.badges).map(k => {
+                          const d = BADGE_DEFS[k]
+                          return (
+                            <span key={k} title={inProgress ? `${d.desc} (month still in progress — not final)` : d.desc}
+                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-poppins font-semibold ${BADGE_TONE[d.tone]}`}>
+                              {d.label}
+                            </span>
+                          )
+                        })}
+                      </div>
                     </div>
+                    {t.slayerMatch && <div className="mt-2.5"><SlayerScorecard m={t.slayerMatch} /></div>}
                   </div>
-                  {t.slayerMatch && <div className="mt-2.5"><SlayerScorecard m={t.slayerMatch} /></div>}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
