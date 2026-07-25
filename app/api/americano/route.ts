@@ -3,8 +3,8 @@ import { randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  computeStandings, generateNextRound, POINTS_OPTIONS,
-  MIN_PLAYERS, MAX_PLAYERS, MAX_COURTS, MAX_NAME_LEN, MAX_PLAYER_NAME_LEN,
+  computeStandings, generateNextRound, targetProgress, roundsFor, POINTS_OPTIONS,
+  MIN_PLAYERS, MAX_PLAYERS, MAX_COURTS, MAX_ROUNDS, MAX_NAME_LEN, MAX_PLAYER_NAME_LEN,
   type AmericanoPlayer, type AmericanoRound,
 } from '@/lib/americano'
 
@@ -128,12 +128,27 @@ export async function POST(request: NextRequest) {
     if (!Number.isInteger(t) || t < 1 || t > 3 * (names.length - 1)) {
       return NextResponse.json({ error: 'Invalid matches-per-player target.' }, { status: 400 })
     }
+    if (roundsFor(names.length, t, courts) > MAX_ROUNDS) {
+      return NextResponse.json({ error: `That target needs more than ${MAX_ROUNDS} rounds — pick a smaller one.` }, { status: 400 })
+    }
     targetMatches = t
   }
 
   const players: AmericanoPlayer[] = names.map((n, i) => ({ id: i, name: n }))
   const organizerToken = randomBytes(24).toString('hex')
-  const round1 = generateNextRound(format, players, [], courts, organizerToken, targetMatches)
+
+  // Americano with a finish line: the whole schedule is drawn up front so the
+  // night is fully visible from round 1 (the organizer can reshuffle unscored
+  // rounds at any point). Mexicano stays round-by-round — its draws come from
+  // live standings — and open-ended tournaments draw as they go.
+  const rounds: AmericanoRound[] = []
+  if (format === 'americano' && targetMatches !== null) {
+    while (rounds.length < MAX_ROUNDS && targetProgress(players, rounds, targetMatches).totalNeed > 0) {
+      rounds.push(generateNextRound(format, players, rounds, courts, organizerToken, targetMatches))
+    }
+  } else {
+    rounds.push(generateNextRound(format, players, [], courts, organizerToken, targetMatches))
+  }
 
   const row: {
     name: string
@@ -152,20 +167,21 @@ export async function POST(request: NextRequest) {
     courts,
     played_on: playedOn,
     players,
-    rounds: [round1],
+    rounds,
     organizer_token: organizerToken,
   }
   if (targetMatches !== null) row.target_matches = targetMatches
   let insert = await supabaseAdmin.from('americano_tournaments').insert(row).select('id').single()
   // Graceful degradation while the target_matches migration hasn't run:
-  // create the tournament open-ended rather than failing the organizer.
+  // create the tournament open-ended (round 1 only) rather than failing.
   let targetSaved = targetMatches !== null
   if (insert.error && targetMatches !== null && insert.error.message.includes('target_matches')) {
     targetSaved = false
     delete row.target_matches
+    row.rounds = rounds.slice(0, 1)
     insert = await supabaseAdmin.from('americano_tournaments').insert(row).select('id').single()
   }
 
   if (insert.error) return NextResponse.json({ error: insert.error.message }, { status: 500 })
-  return NextResponse.json({ id: insert.data.id, organizerToken, targetSaved })
+  return NextResponse.json({ id: insert.data.id, organizerToken, targetSaved, roundsDrawn: targetSaved ? rounds.length : 1 })
 }

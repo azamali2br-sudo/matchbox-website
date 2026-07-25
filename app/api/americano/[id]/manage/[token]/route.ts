@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 import {
@@ -81,6 +82,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: `Everyone has reached ${target} matches — enter any missing scores and mark the tournament completed.` }, { status: 400 })
     }
     rounds.push(generateNextRound(t.format, players, rounds, t.courts, t.organizer_token, target))
+  } else if (body.action === 'reshuffle') {
+    // Redraw every round that has no score yet with a fresh shuffle — for
+    // when the pre-drawn pairings don't match who's actually at the court.
+    // Played (scored) rounds are kept verbatim.
+    const lastScored = rounds.reduce(
+      (last, r, i) => (r.matches.some(m => m.score1 !== null || m.score2 !== null) ? i : last), -1)
+    const kept = rounds.slice(0, lastScored + 1)
+    const target = t.target_matches ?? null
+    const seed = `${t.organizer_token}:${randomBytes(8).toString('hex')}`
+    const regen: AmericanoRound[] = [...kept]
+    if (t.format === 'americano' && target !== null) {
+      while (regen.length < MAX_ROUNDS && targetProgress(players, regen, target).totalNeed > 0) {
+        regen.push(generateNextRound(t.format, players, regen, t.courts, seed, target))
+      }
+    } else {
+      for (let i = kept.length; i < rounds.length; i++) {
+        regen.push(generateNextRound(t.format, players, regen, t.courts, seed, target))
+      }
+    }
+    if (regen.length === kept.length) {
+      return NextResponse.json({ error: 'Nothing to reshuffle — every round already has scores.' }, { status: 400 })
+    }
+    rounds.splice(0, rounds.length, ...regen)
   } else if (body.action === 'addPlayer') {
     const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : ''
     if (!name || name.length > MAX_PLAYER_NAME_LEN) {
@@ -106,6 +130,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const scored = rounds.reduce((n, r) => n + r.matches.filter(m => m.score1 !== null).length, 0)
     if (scored === 0) {
       return NextResponse.json({ error: 'Enter at least one score before completing.' }, { status: 400 })
+    }
+    // Drop trailing rounds nobody played (pre-drawn schedules that ended
+    // early) so the final recap shows only real padel.
+    while (rounds.length > 0 && rounds[rounds.length - 1].matches.every(m => m.score1 === null && m.score2 === null)) {
+      rounds.pop()
     }
   } else {
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })

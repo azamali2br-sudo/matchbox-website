@@ -86,7 +86,7 @@ export default function NewClient() {
   const [playersText, setPlayersText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [created, setCreated] = useState<{ id: string; organizerToken: string; targetSaved?: boolean } | null>(null)
+  const [created, setCreated] = useState<{ id: string; organizerToken: string; targetSaved?: boolean; roundsDrawn?: number } | null>(null)
 
   const n = /^\d+$/.test(countText.trim()) ? parseInt(countText.trim(), 10) : null
   const nValid = n !== null && n >= MIN_PLAYERS && n <= MAX_PLAYERS
@@ -138,11 +138,14 @@ export default function NewClient() {
             You&apos;re <span className="text-orange">On</span>
           </h1>
           <p className="font-poppins text-white/50 text-sm mb-4">
-            Round 1 is drawn. Two links matter now — one to share, one to keep.
+            {(created.roundsDrawn ?? 1) > 1
+              ? `The full schedule is drawn — all ${created.roundsDrawn} rounds. Two links matter now — one to share, one to keep.`
+              : 'Round 1 is drawn. Two links matter now — one to share, one to keep.'}
           </p>
           {selectedTarget !== null && created.targetSaved !== false && (
             <p className="font-poppins text-white/40 text-xs mb-8">
-              Finish line: {selectedTarget} matches per player — the organizer page will tell you when you&apos;re there.
+              Finish line: {selectedTarget} matches per player.
+              {(created.roundsDrawn ?? 1) > 1 && ' If some players are late or missing, use Manage players + "Reshuffle upcoming rounds" on the organizer page to redraw around who’s actually there.'}
             </p>
           )}
           {selectedTarget !== null && created.targetSaved === false && (

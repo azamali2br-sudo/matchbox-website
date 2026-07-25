@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { targetProgress, isActivePlayer } from '@/lib/americano'
 import TournamentView, { type TournamentState, type OrganizerActions } from '@/components/americano/TournamentView'
 
 export default function ManageClient({ id, token, roundCap = null }: { id: string; token: string; roundCap?: number | null }) {
@@ -10,6 +11,7 @@ export default function ManageClient({ id, token, roundCap = null }: { id: strin
   const [busy, setBusy] = useState(false)
   const [actionErr, setActionErr] = useState<string | null>(null)
   const [confirmComplete, setConfirmComplete] = useState(false)
+  const [confirmReshuffle, setConfirmReshuffle] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const base = `/api/americano/${id}/manage/${token}`
@@ -68,6 +70,23 @@ export default function ManageClient({ id, token, roundCap = null }: { id: strin
   const unscored = t.rounds.reduce((n, r) => n + r.matches.filter(m => m.score1 === null).length, 0)
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/americano/${t.id}` : ''
 
+  // Matches-per-player finish line (null on open-ended tournaments).
+  const target = t.targetMatches
+  const progress = target !== null ? targetProgress(t.players, t.rounds, target) : null
+  const activeApps = progress ? t.players.filter(isActivePlayer).map(p => progress.appearances.get(p.id) ?? 0) : []
+  const allDrawn = progress !== null && progress.totalNeed === 0
+  const finished = allDrawn && unscored === 0
+  const roundsToGo = progress !== null
+    ? Math.ceil(progress.totalNeed / (4 * Math.max(1, Math.min(t.courts, Math.floor(activeApps.length / 4)))))
+    : 0
+  // Played (scored) matches per active player — the progress that matters once
+  // the whole schedule is drawn up front.
+  const activeGames = t.standings.filter(s => s.active).map(s => s.games)
+  // Trailing rounds with no scores at all are the reshuffleable ones.
+  const lastScoredIdx = t.rounds.reduce(
+    (last, r, i) => (r.matches.some(m => m.score1 !== null || m.score2 !== null) ? i : last), -1)
+  const reshufflable = t.rounds.length - (lastScoredIdx + 1)
+
   const organizer: OrganizerActions = {
     saveScore: (round, match, s1, s2) => act({ action: 'score', round, match, score1: s1, score2: s2 }),
     nextRound: () => act({ action: 'nextRound' }),
@@ -104,9 +123,25 @@ export default function ManageClient({ id, token, roundCap = null }: { id: strin
         {/* Round + completion controls */}
         {active && (
           <div className="mt-8 space-y-4">
+            {target !== null && !allDrawn && (
+              <p className="font-poppins text-white/40 text-xs text-center">
+                Finish line: {target} matches per player — everyone is at {Math.min(...activeApps)}–{Math.max(...activeApps)}, roughly {roundsToGo} {roundsToGo === 1 ? 'round' : 'rounds'} to go.
+              </p>
+            )}
+            {allDrawn && !finished && activeGames.length > 0 && (
+              <p className="font-poppins text-white/40 text-xs text-center">
+                All {t.rounds.length} rounds are drawn — players are at {Math.min(...activeGames)}–{Math.max(...activeGames)} of {target} matches played. Score as you play.
+              </p>
+            )}
             {actionErr && <p className="font-poppins text-red-400 text-sm">{actionErr}</p>}
             <div className="flex flex-col sm:flex-row gap-3">
-              {roundCap !== null && t.rounds.length >= roundCap ? (
+              {finished ? (
+                <div className="flex-1 border border-green-500/30 bg-green-500/5 rounded-full px-8 py-4 text-center">
+                  <span className="font-poppins text-green-400/90 text-sm font-semibold">
+                    Everyone has reached {target} matches — finish up below.
+                  </span>
+                </div>
+              ) : allDrawn ? null : roundCap !== null && t.rounds.length >= roundCap ? (
                 <div className="flex-1 border border-white/15 rounded-full px-8 py-4 text-center">
                   <span className="font-poppins text-white/50 text-sm font-semibold">
                     Round cap reached ({roundCap}) — enter any missing scores, then finish up.
@@ -127,6 +162,14 @@ export default function ManageClient({ id, token, roundCap = null }: { id: strin
                 Mark as completed
               </button>
             </div>
+            {reshufflable > 0 && (
+              <button
+                onClick={() => setConfirmReshuffle(true)}
+                disabled={busy}
+                className="w-full border border-white/10 hover:border-orange/40 text-white/50 hover:text-orange font-poppins font-semibold text-xs px-6 py-3 rounded-full transition-colors disabled:opacity-50">
+                Reshuffle upcoming rounds ({reshufflable})
+              </button>
+            )}
             {unscored > 0 && (
               <p className="font-poppins text-white/30 text-xs text-center">
                 {unscored} {unscored === 1 ? 'match has' : 'matches have'} no score yet — unscored matches don&apos;t count toward standings.
@@ -143,6 +186,38 @@ export default function ManageClient({ id, token, roundCap = null }: { id: strin
             <Link href={`/americano/${t.id}`} className="font-poppins text-orange text-xs font-semibold inline-block mt-2 hover:underline">
               View the public recap page
             </Link>
+          </div>
+        )}
+
+        {/* Confirm reshuffle modal */}
+        {confirmReshuffle && (
+          <div className="fixed inset-0 z-50 bg-navy/90 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="bg-navy-card border border-white/10 rounded-3xl p-6 sm:p-8 max-w-md w-full">
+              <h3 className="font-qaranta text-2xl text-white uppercase mb-3">Reshuffle upcoming rounds?</h3>
+              <p className="font-poppins text-white/50 text-sm leading-relaxed mb-2">
+                Every round without a score ({reshufflable}) gets redrawn with a fresh shuffle — use it when the
+                pairings on the board don&apos;t match who&apos;s actually at the court.
+                Played rounds and scores stay exactly as they are.
+              </p>
+              <p className="font-poppins text-white/35 text-xs leading-relaxed">
+                Tip: remove no-shows in Manage players first, then reshuffle — the new draw only uses players in the draw.
+              </p>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setConfirmReshuffle(false)}
+                  className="flex-1 border border-white/15 text-white/70 font-poppins font-semibold text-sm px-6 py-3 rounded-full">
+                  Keep the draw
+                </button>
+                <button
+                  onClick={async () => {
+                    setConfirmReshuffle(false)
+                    const e = await act({ action: 'reshuffle' })
+                    if (e) setActionErr(e)
+                  }}
+                  className="flex-1 bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-6 py-3 rounded-full transition-colors">
+                  Reshuffle
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

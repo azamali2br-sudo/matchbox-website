@@ -324,7 +324,9 @@ export function generateNextRound(
     // to split the seated players into courts of four (12 seated = 5,775
     // partitions) and take the arrangement with the fewest repeat
     // partners/opponents. Repeats only happen when history forces them.
-    arrangement = bestArrangementExhaustive(active, counts).arr
+    // Seeded pre-shuffle: among equally-optimal arrangements the seed decides,
+    // so a reshuffle with a fresh seed genuinely changes the draw.
+    arrangement = bestArrangementExhaustive(seededShuffle(active, rand), counts).arr
   } else {
     // Round 1 (seeded variety) and big rounds (13+ seated): search seeded
     // shuffles for the arrangement with the fewest repeat partners/opponents.
