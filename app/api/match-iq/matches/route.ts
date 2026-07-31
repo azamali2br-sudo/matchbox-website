@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { requireAdmin } from '@/lib/admin-auth'
+import { getCurrentAccountId } from '@/lib/account-auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { titleCaseName } from '@/lib/format'
 import { getClosedMonths, loadMatchIqInputs } from '@/lib/seasons'
@@ -103,9 +104,43 @@ export async function GET(request: NextRequest) {
       .in('id', submitterIds)
     for (const a of accts ?? []) submitterNames[a.id] = a.name
   }
-  const matchesWithSubmitter = matches.map((m: { submitted_by: string | null }) => ({
+  // Approval-queue duplicate guard: flag a pending match when another match
+  // (pending or approved) already involves the same four players on the same
+  // date — the observed failure mode is the same match entered twice.
+  const duplicateNotes: Record<string, string> = {}
+  if (status === 'pending' && matches.length > 0) {
+    type DupRow = {
+      id: string; played_on: string; start_time: string | null; status: string
+      team1_p1: string; team1_p2: string; team2_p1: string; team2_p2: string
+      team1_score: number; team2_score: number
+    }
+    const dates = [...new Set(matches.map((m: { played_on: string }) => m.played_on))]
+    const { data: sameDay } = await supabaseAdmin
+      .from('matches')
+      .select('id, played_on, start_time, status, team1_p1, team1_p2, team2_p1, team2_p2, team1_score, team2_score')
+      .in('played_on', dates)
+      .in('status', ['pending', 'approved'])
+    const playerKey = (ids: string[], date: string) => [...ids].sort().join('|') + '@' + date
+    const byKey = new Map<string, DupRow[]>()
+    for (const r of (sameDay ?? []) as DupRow[]) {
+      const k = playerKey([r.team1_p1, r.team1_p2, r.team2_p1, r.team2_p2], r.played_on)
+      byKey.set(k, [...(byKey.get(k) ?? []), r])
+    }
+    for (const m of matches as unknown as { id: string; played_on: string; p1: { id: string }; p2: { id: string }; p3: { id: string }; p4: { id: string } }[]) {
+      const k = playerKey([m.p1.id, m.p2.id, m.p3.id, m.p4.id], m.played_on)
+      const twin = (byKey.get(k) ?? []).find(r => r.id !== m.id)
+      if (twin) {
+        const when = twin.start_time ? ` at ${twin.start_time}` : ''
+        duplicateNotes[m.id] =
+          `these four players already have a ${twin.status} ${twin.team1_score}–${twin.team2_score} match on this date${when}`
+      }
+    }
+  }
+
+  const matchesWithSubmitter = matches.map((m: { id: string; submitted_by: string | null }) => ({
     ...m,
     submitted_by_name: (m.submitted_by && submitterNames[m.submitted_by]) || null,
+    duplicate_note: duplicateNotes[m.id] ?? null,
   }))
 
   return NextResponse.json({ matches: matchesWithSubmitter, matchRatings, total: count ?? 0 })
@@ -115,8 +150,20 @@ export async function POST(request: NextRequest) {
   const limited = rateLimit(request, 'match-submit', 10, 60 * 60 * 1000)
   if (limited) return limited
 
+  // Submitter identity comes from the session, never the request body — a
+  // logged-in account (normal path) or the admin session (manual entry). No
+  // session at all → no submission.
+  let submitter = await getCurrentAccountId()
+  if (!submitter) {
+    const adminGuard = await requireAdmin(request)
+    if (adminGuard) {
+      return NextResponse.json({ error: 'Please log in to submit a match.' }, { status: 401 })
+    }
+    submitter = 'admin'
+  }
+
   const body = await request.json()
-  const { playedOn, court, startTime, team1, team2, team1Score, team2Score, setScores, submittedBy } = body
+  const { playedOn, court, startTime, team1, team2, team1Score, team2Score, setScores } = body
 
   // team1 / team2 are arrays of two ACCOUNT ids picked from the name search.
   if (!playedOn || !Array.isArray(team1) || !Array.isArray(team2) || team1.length !== 2 || team2.length !== 2) {
@@ -194,7 +241,7 @@ export async function POST(request: NextRequest) {
       team1_score: team1Score,
       team2_score: team2Score,
       set_scores: setScores ?? null,
-      submitted_by: submittedBy || 'unknown',
+      submitted_by: submitter,
     })
     .select(MATCH_SELECT)
     .single()

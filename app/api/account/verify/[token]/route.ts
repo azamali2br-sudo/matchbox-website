@@ -28,7 +28,12 @@ export async function GET(
     return NextResponse.redirect(`${base}/login?error=expired`)
   }
 
-  const res = NextResponse.redirect(`${base}/account`)
+  // Land wherever the login started (e.g. the match-submit form) — relative
+  // paths only, so the link can never redirect off-site.
+  const nextParam = new URL(request.url).searchParams.get('next')
+  const next = nextParam && /^\/(?!\/)[\w\-/?=&%.]*$/.test(nextParam) ? nextParam : '/account'
+
+  const res = NextResponse.redirect(`${base}${next}`)
   res.cookies.set(ACCOUNT_COOKIE, createAccountSession(account.id), accountCookieOptions())
   return res
 }

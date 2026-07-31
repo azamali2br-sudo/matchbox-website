@@ -915,6 +915,7 @@ function Empty({ title, sub }: { title: string; sub: string }) {
 type PendingMatch = {
   id: string; played_on: string; court: string | null; start_time: string | null
   team1_score: number; team2_score: number; submitted_by: string; submitted_by_name: string | null; created_at: string
+  duplicate_note: string | null
   p1: { id: string; name: string }; p2: { id: string; name: string }
   p3: { id: string; name: string }; p4: { id: string; name: string }
 }
@@ -973,6 +974,11 @@ function MatchIQAdmin() {
                     {m.court && ` · Box ${m.court}`}{m.start_time && ` · ${formatTime(m.start_time)}`}
                     {' · '}Submitted by {m.submitted_by_name ?? m.submitted_by}
                   </p>
+                  {m.duplicate_note && (
+                    <p className="font-poppins text-amber-400 text-xs mt-1.5">
+                      Possible duplicate — {m.duplicate_note}. Reject if it&apos;s the same match entered twice.
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => act(m.id, 'approve')} disabled={acting === m.id} className="bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 text-green-400 font-poppins text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50">

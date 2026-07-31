@@ -16,13 +16,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Please enter a valid email' }, { status: 400 })
   }
 
+  // Optional post-login destination (e.g. back to the match-submit form).
+  // Relative paths only — never an absolute URL someone else controls.
+  const next = typeof body?.next === 'string' && /^\/(?!\/)[\w\-/?=&%.]*$/.test(body.next) && body.next.length <= 200
+    ? body.next
+    : null
+
   const { supabaseAdmin } = await import('@/lib/supabase')
   const account = await findAccountByEmail(supabaseAdmin, email)
 
   if (account) {
     const token = await issueMagicToken(supabaseAdmin, { accountId: account.id, email, purpose: 'login' })
     const base = new URL(request.url).origin
-    const link = `${base}/api/account/verify/${token}`
+    const link = `${base}/api/account/verify/${token}${next ? `?next=${encodeURIComponent(next)}` : ''}`
     const { sendMagicLink } = await import('@/lib/email')
     await sendMagicLink({ to: email, name: account.name, link, isSignup: false })
   }

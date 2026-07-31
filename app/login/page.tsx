@@ -13,6 +13,7 @@ const ERRORS: Record<string, string> = {
 function LoginInner() {
   const params = useSearchParams()
   const linkError = params.get('error')
+  const nextPath = params.get('next')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
@@ -26,7 +27,7 @@ function LoginInner() {
       const res = await fetch('/api/account/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, next: nextPath || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Could not send the link'); return }

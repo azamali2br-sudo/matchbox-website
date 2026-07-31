@@ -126,6 +126,21 @@ export default function SubmitMatchPage() {
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  // 'loading' → checking session; null → logged out; string → logged-in name.
+  const [me, setMe] = useState<'loading' | null | string>('loading')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/account/me')
+      .then(async res => {
+        if (cancelled) return
+        if (!res.ok) { setMe(null); return }
+        const data = await res.json()
+        setMe(data.account?.name ?? '')
+      })
+      .catch(() => { if (!cancelled) setMe(null) })
+    return () => { cancelled = true }
+  }, [])
 
   const validScore = isValidSetsScore(team1Sets, team2Sets)
   const totalSets = validScore ? setsPlayed(parseInt(team1Sets), parseInt(team2Sets)) : 0
@@ -192,10 +207,14 @@ export default function SubmitMatchPage() {
           team1Score: parseInt(team1Sets),
           team2Score: parseInt(team2Sets),
           setScores: parsedSetScores,
-          submittedBy: ids[0],
         }),
       })
       const data = await res.json()
+      if (res.status === 401) {
+        setMe(null)
+        setError('Your session expired — log in again to submit.')
+        return
+      }
       if (!res.ok) { setError(data.error || 'Submission failed.'); return }
       setSuccess(true)
     } catch {
@@ -243,6 +262,38 @@ export default function SubmitMatchPage() {
     )
   }
 
+  // Submitting requires a logged-in account — the submitter is recorded with
+  // the match, so identity has to be real, not typed in.
+  if (me === 'loading') {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-28 px-6">
+        <p className="font-poppins text-white/30 text-sm">Loading…</p>
+      </div>
+    )
+  }
+  if (me === null) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center pt-28 px-6">
+        <div className="max-w-md w-full text-center">
+          <h1 className="font-qaranta text-4xl text-white uppercase mb-4">Log in to submit</h1>
+          <p className="font-poppins text-white/50 text-sm leading-relaxed mb-8">
+            Match results are tied to the person who reports them, so you need to be
+            logged in to submit one. One tap on the emailed link and you&apos;ll land right back here.
+          </p>
+          {error && <p className="font-poppins text-orange text-sm mb-6">{error}</p>}
+          <div className="flex flex-col gap-3">
+            <Link href="/login?next=/match-iq/submit" className="inline-flex items-center justify-center bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all">
+              Log in
+            </Link>
+            <Link href="/signup" className="font-poppins text-white/40 text-sm hover:text-white/70 transition-colors">
+              New here? Create an account
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-navy pt-28">
       <div className="max-w-2xl mx-auto px-6 py-12">
@@ -253,6 +304,7 @@ export default function SubmitMatchPage() {
         <h1 className="font-qaranta text-5xl text-white uppercase mb-2">Submit <span className="text-orange">Match</span></h1>
         <p className="font-poppins text-white/40 text-sm mb-10">
           Search and pick all 4 players, then enter the final score. Ratings update once an admin approves the match.
+          {me && <span className="block mt-1 text-white/30">Submitting as {me}.</span>}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
