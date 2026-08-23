@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  computeStandings, generateNextRound, targetProgress, roundsFor, POINTS_OPTIONS,
+  computeStandings, generateNextRound, polishSchedule, targetProgress, roundsFor, POINTS_OPTIONS,
   MIN_PLAYERS, MAX_PLAYERS, MAX_COURTS, MAX_ROUNDS, MAX_NAME_LEN, MAX_PLAYER_NAME_LEN,
   type AmericanoPlayer, type AmericanoRound,
 } from '@/lib/americano'
@@ -141,11 +141,14 @@ export async function POST(request: NextRequest) {
   // night is fully visible from round 1 (the organizer can reshuffle unscored
   // rounds at any point). Mexicano stays round-by-round — its draws come from
   // live standings — and open-ended tournaments draw as they go.
-  const rounds: AmericanoRound[] = []
+  let rounds: AmericanoRound[] = []
   if (format === 'americano' && targetMatches !== null) {
     while (rounds.length < MAX_ROUNDS && targetProgress(players, rounds, targetMatches).totalNeed > 0) {
       rounds.push(generateNextRound(format, players, rounds, courts, organizerToken, targetMatches))
     }
+    // Round-by-round drawing has no lookahead; the polish pass swaps players
+    // between rounds until the schedule is repeat-free (or as close as exists).
+    rounds = polishSchedule(format, rounds, 0, organizerToken)
   } else {
     rounds.push(generateNextRound(format, players, [], courts, organizerToken, targetMatches))
   }

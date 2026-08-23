@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  generateNextRound, isActivePlayer, targetProgress, MAX_ROUNDS, MIN_PLAYERS, MAX_PLAYERS, MAX_PLAYER_NAME_LEN,
+  generateNextRound, isActivePlayer, polishSchedule, targetProgress, MAX_ROUNDS, MIN_PLAYERS, MAX_PLAYERS, MAX_PLAYER_NAME_LEN,
   type AmericanoPlayer, type AmericanoRound,
 } from '@/lib/americano'
 import { publicProjection, type TournamentRow } from '../../../route'
@@ -104,7 +104,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (regen.length === kept.length) {
       return NextResponse.json({ error: 'Nothing to reshuffle — every round already has scores.' }, { status: 400 })
     }
-    rounds.splice(0, rounds.length, ...regen)
+    // Scored rounds are history; the regenerated tail gets the lookahead polish
+    // so a reshuffle lands on a repeat-free schedule whenever one exists.
+    rounds.splice(0, rounds.length, ...polishSchedule(t.format, regen, kept.length, seed))
   } else if (body.action === 'addPlayer') {
     const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : ''
     if (!name || name.length > MAX_PLAYER_NAME_LEN) {
