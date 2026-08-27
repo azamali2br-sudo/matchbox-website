@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { titleCaseName } from '@/lib/format'
 import { getClosedMonths, loadMatchIqInputs } from '@/lib/seasons'
 import { monthLabel, replaySeason } from '@/lib/leaderboard'
+import { validateSetScores } from '@/lib/set-scores'
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
@@ -184,6 +185,16 @@ export async function POST(request: NextRequest) {
   }
   if (s1 === s2) {
     return NextResponse.json({ error: 'Match cannot end in a tie' }, { status: 400 })
+  }
+  // Set scores are optional, but when given they must be real finished sets
+  // (a 5–3 set can't be submitted) and agree with the sets score.
+  if (setScores != null) {
+    if (!Array.isArray(setScores)) {
+      return NextResponse.json({ error: 'Invalid set scores' }, { status: 400 })
+    }
+    const parsedSets = setScores.map((x: { t1?: unknown; t2?: unknown }) => ({ t1: Number(x?.t1), t2: Number(x?.t2) }))
+    const setErr = validateSetScores(parsedSets, s1, s2)
+    if (setErr) return NextResponse.json({ error: setErr }, { status: 400 })
   }
 
   const accountIds: string[] = [...team1, ...team2]

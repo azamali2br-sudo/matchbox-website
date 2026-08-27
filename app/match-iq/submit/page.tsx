@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { TIME_SLOTS, formatTime, getTodayStr } from '@/lib/constants'
+import { validateSetScores } from '@/lib/set-scores'
 
 type Sel = { id: string; name: string }
 type SetScore = { t1: string; t2: string }
@@ -192,6 +193,10 @@ export default function SubmitMatchPage() {
     const parsedSetScores = showSetScores
       ? setScores.map(s => ({ t1: parseInt(s.t1) || 0, t2: parseInt(s.t2) || 0 }))
       : null
+    if (parsedSetScores) {
+      const setErr = validateSetScores(parsedSetScores, parseInt(team1Sets), parseInt(team2Sets))
+      if (setErr) { setError(setErr); return }
+    }
 
     setSubmitting(true)
     try {
@@ -461,6 +466,15 @@ export default function SubmitMatchPage() {
                         </div>
                       ))}
                     </div>
+                    {(() => {
+                      const filled = setScores.length > 0 && setScores.every(x => x.t1 !== '' && x.t2 !== '')
+                      const liveErr = filled
+                        ? validateSetScores(setScores.map(x => ({ t1: parseInt(x.t1), t2: parseInt(x.t2) })), parseInt(team1Sets), parseInt(team2Sets))
+                        : null
+                      return liveErr
+                        ? <p className="font-poppins text-red-400 text-xs mt-3">{liveErr}</p>
+                        : <p className="font-poppins text-white/25 text-xs mt-3">Sets end 6–0 to 6–4, 7–5 or 7–6. A deciding set can be a 10-point match tiebreak.</p>
+                    })()}
                   </div>
                 )}
               </div>
