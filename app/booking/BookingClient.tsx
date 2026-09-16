@@ -184,9 +184,9 @@ export default function BookingClient() {
           applyCredit: creditToApply,
         }),
       })
-      const data = await res.json()
       if (res.status === 401) { window.location.href = '/login'; return }
-      if (!res.ok) throw new Error(data.error)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || `Server error (HTTP ${res.status})`)
 
       setSuccessData({
         ref: data.booking.ref,
@@ -201,8 +201,9 @@ export default function BookingClient() {
         cancelToken: data.booking.cancelToken,
       })
       setStep('success')
-    } catch {
-      setErrors({ submit: 'Something went wrong. Please try WhatsApp instead.' })
+    } catch (err) {
+      const detail = err instanceof Error && err.message ? err.message : ''
+      setErrors({ submit: detail ? `${detail} — please try again or WhatsApp us.` : 'Something went wrong. Please try WhatsApp instead.' })
     } finally {
       setSubmitting(false)
     }

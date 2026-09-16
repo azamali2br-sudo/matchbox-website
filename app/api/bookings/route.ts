@@ -271,7 +271,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { data, error } = await supabase.from('bookings').insert(row).select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[booking] insert failed:', { code: error.code, message: error.message, details: error.details, phone, court, date, startTime, durationHours })
+    return NextResponse.json({ error: `Booking could not be saved (${error.code ?? 'db'}): ${error.message}` }, { status: 500 })
+  }
 
   const booking = toBooking(data)
 
