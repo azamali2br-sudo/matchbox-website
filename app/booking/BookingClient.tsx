@@ -24,8 +24,10 @@ type SlotStatus = 'available' | 'pending' | 'confirmed' | 'past' | 'closed'
 
 // Matchbox closure window — slots starting in [09:00, 15:00) are unavailable.
 function isClosedHour(time: string): boolean {
-  const h = parseInt(time.split(':')[0])
-  return h >= 9 && h < 15
+  const [h, m] = time.split(':').map(Number)
+  // Closed 09:00–15:00. Min booking is 1h, so an 08:30 start would run into the
+  // closure too (server rejects it) — treat it as closed as well.
+  return (h >= 9 && h < 15) || (h === 8 && m === 30)
 }
 type Step = 'calendar' | 'form' | 'success'
 
@@ -127,11 +129,10 @@ export default function BookingClient() {
   }, [fetchSlots])
 
   function isSlotRangeAvailable(startTime: string, hours: number): boolean {
-    const steps = Math.round(hours * 2) // number of 30-min steps needed (we check 1-hr slots)
+    const steps = Math.round(hours * 2) // TIME_SLOTS are 30-min, so check every half-hour the booking covers
     const startIdx = TIME_SLOTS.indexOf(startTime)
     if (startIdx === -1) return false
-    // Check each 1-hr slot that the booking would cover
-    for (let i = 0; i < Math.ceil(hours); i++) {
+    for (let i = 0; i < steps; i++) {
       const slotTime = TIME_SLOTS[(startIdx + i) % TIME_SLOTS.length]
       const slotInfo = slots.find(s => s.time === slotTime)
       if (slotInfo && slotInfo.status !== 'available') return false

@@ -153,7 +153,11 @@ export async function POST(request: NextRequest) {
   // session, never the body — so it can't be spoofed). Admin (manual / WhatsApp)
   // bookings bypass the gate and supply the customer's details directly.
   const store = await cookies()
-  const isAdmin = verifySessionToken(store.get(ADMIN_COOKIE)?.value)
+  const hasAdminCookie = verifySessionToken(store.get(ADMIN_COOKIE)?.value)
+  // Admin (manual) booking = admin cookie AND the admin form's customer fields.
+  // A logged-in player booking from a browser that also holds the admin cookie
+  // (e.g. the front-desk laptop) must still go down the normal online path.
+  const isAdmin = hasAdminCookie && (typeof body.name === 'string' || typeof body.phone === 'string')
 
   let name: string, phone: string, email: string, source: 'online' | 'admin' | 'whatsapp'
   let accountPhone: string | null = null
