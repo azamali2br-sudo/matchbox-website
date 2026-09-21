@@ -254,6 +254,51 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ booking: newBooking, demoMode: true })
   }
 
+  // ── No double bookings ──────────────────────────────────────────
+  // Compare against every non-cancelled booking on this court for the same day
+  // and the days either side (a late slot can cross midnight in either direction). Holds
+  // that have lapsed are released first so they can't block a live customer.
+  // The DB also enforces this via an exclusion constraint (migration
+  // 2026-09-22_booking_no_overlap.sql), which closes the race between two
+  // simultaneous requests — this check just gives a clean, early message.
+  {
+    const { supabaseAdmin } = await import('@/lib/supabase')
+    await supabaseAdmin
+      .from('bookings')
+      .update({ attendance: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'admin' })
+      .eq('attendance', 'booked')
+      .eq('paid_amount', 0)
+      .lt('hold_expires_at', new Date().toISOString())
+
+    const shiftDate = (days: number) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10) }
+    const prevDateStr = shiftDate(-1)
+    const nextDateStr = shiftDate(1)
+
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from('bookings')
+      .select('date, start_time, duration_hours')
+      .eq('court', court)
+      .in('date', [prevDateStr, date, nextDateStr])
+      .neq('attendance', 'cancelled')
+    if (existingErr) {
+      console.error('[booking] overlap lookup failed:', existingErr)
+      return NextResponse.json({ error: 'Could not check availability. Please try again.' }, { status: 500 })
+    }
+
+    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+    const newStart = toMin(startTime)
+    const newEnd = newStart + Math.round(Number(durationHours) * 60)
+    const clash = (existing ?? []).some(b => {
+      const dayOffset = b.date === date ? 0 : b.date === prevDateStr ? -24 * 60 : 24 * 60
+      const s = dayOffset + toMin(b.start_time as string)
+      const e = s + Math.round(Number(b.duration_hours) * 60)
+      return s < newEnd && e > newStart
+    })
+    if (clash) {
+      return NextResponse.json({ error: 'That slot has just been taken. Please pick another time.' }, { status: 409 })
+    }
+  }
+
   const { supabase } = await import('@/lib/supabase')
 
   const row = {
@@ -275,6 +320,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { data, error } = await supabase.from('bookings').insert(row).select().single()
+  if (error?.code === '23P01') {
+    // Exclusion constraint (bookings_no_overlap) — lost a race with another booking.
+    return NextResponse.json({ error: 'That slot has just been taken. Please pick another time.' }, { status: 409 })
+  }
   if (error) {
     console.error('[booking] insert failed:', { code: error.code, message: error.message, details: error.details, phone, court, date, startTime, durationHours })
     return NextResponse.json({ error: `Booking could not be saved (${error.code ?? 'db'}): ${error.message}` }, { status: 500 })
