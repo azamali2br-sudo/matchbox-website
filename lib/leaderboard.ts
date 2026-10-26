@@ -13,6 +13,30 @@ export const MAIN_DRAW_MIN = 3
 const STREAK_MIN = 3             // wins in a row → Wildfire award
 const SLAYER_MIN = 12            // opponent strength gap → Giant Slayer
 
+// A ranked player goes "dormant" once this many days pass without a match:
+// they drop out of the ranking (rating and results kept, NO decay) and the
+// players below move up. Their next match puts them straight back in.
+export const DORMANT_DAYS = 15
+
+// Whole days between a YYYY-MM-DD match date and `today` (both Karachi date-only).
+export function daysSince(dateStr: string | null, today: string): number | null {
+  if (!dateStr) return null
+  const a = Date.parse(`${dateStr}T00:00:00Z`)
+  const b = Date.parse(`${today}T00:00:00Z`)
+  if (Number.isNaN(a) || Number.isNaN(b)) return null
+  return Math.max(0, Math.round((b - a) / 86_400_000))
+}
+
+// The date dormancy is measured against. All-time: today. A month: today while
+// it's running, then its last day — so a past month's board (and the snapshot
+// frozen at close) is the ranking as it stood when the month ended.
+export function dormancyAsOf(month: string | null, today: string): string {
+  if (!month) return today
+  const [y, m] = month.split('-').map(Number)
+  const monthEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+  return monthEnd < today ? monthEnd : today
+}
+
 export type MatchRow = {
   id: string; played_on: string; created_at: string
   team1_p1: string; team1_p2: string; team2_p1: string; team2_p2: string
@@ -122,8 +146,10 @@ export function playerRatingSeries(matches: MatchRow[], playerId: string): { pla
 
 export function buildStandings(
   matches: MatchRow[],
-  opts: { nameById: Record<string, string>; debutMonth: Record<string, string>; month: string | null },
-): { mainDraw: StandingPlayer[]; qualifying: StandingPlayer[] } {
+  // asOf: when set, enough-match players idle DORMANT_DAYS+ by that date go to
+  // `dormant` (unranked, no awards) instead of the Main Draw.
+  opts: { nameById: Record<string, string>; debutMonth: Record<string, string>; month: string | null; asOf?: string },
+): { mainDraw: StandingPlayer[]; qualifying: StandingPlayer[]; dormant: StandingPlayer[] } {
   const { state } = simulate(matches)
   const all: StandingPlayer[] = Object.entries(state).map(([id, s]) => ({
     id, name: opts.nameById[id] ?? 'Unknown', rating: s.rating,
@@ -133,7 +159,11 @@ export function buildStandings(
     maxStreak: s.maxStreak, currentStreak: s.curStreak, lastPlayedAt: s.lastPlayedAt, rank: null, badges: [],
   }))
 
-  const mainDraw = all.filter(p => p.matches >= MAIN_DRAW_MIN).sort(standingOrder)
+  const { asOf } = opts
+  const isDormant = (p: StandingPlayer) => !!asOf && (daysSince(p.lastPlayedAt, asOf) ?? Infinity) >= DORMANT_DAYS
+  const eligible = all.filter(p => p.matches >= MAIN_DRAW_MIN)
+  const mainDraw = eligible.filter(p => !isDormant(p)).sort(standingOrder)
+  const dormant = eligible.filter(isDormant).sort(standingOrder)
   const qualifying = all.filter(p => p.matches < MAIN_DRAW_MIN).sort(standingOrder)
   mainDraw.forEach((p, i) => { p.rank = i + 1 })
 
@@ -175,7 +205,7 @@ export function buildStandings(
     if (hasVeterans) give(pickOne(mainDraw.filter(p => opts.debutMonth[p.id] === opts.month)), 'rookie')
   }
 
-  return { mainDraw, qualifying }
+  return { mainDraw, qualifying, dormant }
 }
 
 // ── Award detail (supporting matches) ────────────────────────────────────────

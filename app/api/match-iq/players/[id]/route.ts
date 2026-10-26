@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { getTodayStr } from '@/lib/constants'
 import {
-  buildStandings, debutMonthMap, monthsWithMatches, monthLabel,
+  buildStandings, debutMonthMap, monthsWithMatches, monthLabel, dormancyAsOf,
   replaySeason, awardMatchIds, enrichMatches, playerRatingSeries, type AwardMatch,
 } from '@/lib/leaderboard'
 import { loadMatchIqInputs, getAllSnapshots } from '@/lib/seasons'
@@ -41,8 +42,10 @@ export async function GET(
   const debutMonth = debutMonthMap(allMatches)
 
   // All-time standing for this player (rank, avg opp). Always a live replay.
-  const allTimeStandings = buildStandings(allMatches, { nameById, debutMonth, month: null })
-  const allRow = [...allTimeStandings.mainDraw, ...allTimeStandings.qualifying].find(p => p.id === id) ?? null
+  // Dormant players come back with rank null (unranked until they play again).
+  const today = getTodayStr()
+  const allTimeStandings = buildStandings(allMatches, { nameById, debutMonth, month: null, asOf: today })
+  const allRow = [...allTimeStandings.mainDraw, ...allTimeStandings.qualifying, ...allTimeStandings.dormant].find(p => p.id === id) ?? null
 
   // Rating graph = the player's rating after each match, in true play order,
   // from the replay (matches the header/leaderboard). created_at carries the
@@ -60,8 +63,8 @@ export async function GET(
   for (const ym of monthsWithMatches(allMatches)) {
     const snap = snapshots[ym]
     const monthMatches = allMatches.filter(m => m.played_on.slice(0, 7) === ym)
-    const draws = snap ?? buildStandings(monthMatches, { nameById, debutMonth, month: ym })
-    const row = [...draws.mainDraw, ...draws.qualifying].find(p => p.id === id)
+    const draws = snap ?? buildStandings(monthMatches, { nameById, debutMonth, month: ym, asOf: dormancyAsOf(ym, today) })
+    const row = [...draws.mainDraw, ...draws.qualifying, ...(draws.dormant ?? [])].find(p => p.id === id)
     if (row && row.badges.length) {
       let slayerMatch: AwardMatch | null = null
       if (row.badges.includes('slayer')) {

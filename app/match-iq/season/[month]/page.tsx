@@ -43,7 +43,7 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
   const champion = mainDraw[0] ?? null
 
   // Award winners (Giant Slayer is a pair) + their supporting matches.
-  const allPlayers = [...standings.mainDraw, ...standings.qualifying]
+  const allPlayers = [...standings.mainDraw, ...standings.qualifying, ...(standings.dormant ?? [])]
   const { log, upsetMatchByPlayer } = replaySeason(monthMatches)
   const awardKeys: BadgeKey[] = ['ironman', 'streak', 'slayer', 'rookie']
   const awards = awardKeys

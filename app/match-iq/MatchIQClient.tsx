@@ -30,6 +30,7 @@ type ApiResp = {
   isCurrentMonth?: boolean
   mainDraw: Player[]
   qualifying: Player[]
+  dormant?: Player[] // missing on seasons frozen before the dormant rule
   totalMatches: number
   totalPlayers: number
 }
@@ -303,7 +304,7 @@ function Leaderboard({
   data: ApiResp | null; loading: boolean
   month: string | null; setMonth: (m: string | null) => void
 }) {
-  const [draw, setDraw] = useState<'main' | 'qualifying'>('main')
+  const [draw, setDraw] = useState<'main' | 'qualifying' | 'dormant'>('main')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ col: SortCol; dir: 'asc' | 'desc' }>({ col: 'rating', dir: 'desc' })
 
@@ -311,7 +312,7 @@ function Leaderboard({
   const isCurrentMonth = data?.isCurrentMonth ?? false
 
   const shown = useMemo(() => {
-    const list = draw === 'main' ? (data?.mainDraw ?? []) : (data?.qualifying ?? [])
+    const list = draw === 'main' ? (data?.mainDraw ?? []) : draw === 'dormant' ? (data?.dormant ?? []) : (data?.qualifying ?? [])
     const q = search.trim().toLowerCase()
     const filtered = q ? list.filter(p => p.name.toLowerCase().includes(q)) : list
     const { col, dir } = sort
@@ -369,6 +370,10 @@ function Leaderboard({
             className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${draw === 'qualifying' ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
             Qualifying <span className="opacity-60">{data?.qualifying.length ?? 0}</span>
           </button>
+          <button onClick={() => setDraw('dormant')}
+            className={`font-poppins text-xs font-semibold px-4 py-2 rounded-lg transition-all ${draw === 'dormant' ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'}`}>
+            Dormant <span className="opacity-60">{data?.dormant?.length ?? 0}</span>
+          </button>
         </div>
         <div className="relative sm:ml-auto sm:w-56">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search player…"
@@ -382,6 +387,11 @@ function Leaderboard({
           Played fewer than 3 matches this month — not ranked yet (too few games to be fair). The counter shows how close each player is to the Main Draw.
         </p>
       )}
+      {draw === 'dormant' && (
+        <p className="font-poppins text-white/35 text-xs -mt-3">
+          No match in the last 15 days — off the ranking for now. Their results this month still count; one match puts them straight back in the Main Draw.
+        </p>
+      )}
 
       {/* Badge guide — only relevant to the ranked Main Draw */}
       {draw === 'main' && !search && shown.some(p => hasBoardCaption(p, isCurrentMonth)) && <BadgeLegend />}
@@ -390,14 +400,14 @@ function Leaderboard({
       {shown.length === 0 ? (
         <div className="text-center py-16 bg-navy-card border border-white/8 rounded-2xl">
           <p className="font-qaranta text-3xl text-white/20 uppercase mb-2">
-            {search ? 'No match' : draw === 'main' ? 'No ranked players yet' : 'Nobody here'}
+            {search ? 'No match' : draw === 'main' ? 'No ranked players yet' : draw === 'dormant' ? 'Nobody dormant' : 'Nobody here'}
           </p>
           <p className="font-poppins text-white/30 text-sm">
-            {search ? 'Try a different name.' : draw === 'main' ? 'Play 3+ matches to make the Main Draw.' : 'Everyone has made the Main Draw.'}
+            {search ? 'Try a different name.' : draw === 'main' ? 'Play 3+ matches to make the Main Draw.' : draw === 'dormant' ? 'Everyone ranked has played in the last 15 days.' : 'Everyone has made the Main Draw.'}
           </p>
         </div>
       ) : (
-        <LeaderTable key={`${draw}-${activeMonth ?? ''}`} players={shown} provisional={draw === 'qualifying'} isCurrentMonth={isCurrentMonth} sort={sort} setSort={setSort} />
+        <LeaderTable key={`${draw}-${activeMonth ?? ''}`} players={shown} provisional={draw === 'qualifying'} dormant={draw === 'dormant'} isCurrentMonth={isCurrentMonth} sort={sort} setSort={setSort} />
       )}
     </div>
   )
@@ -405,11 +415,13 @@ function Leaderboard({
 
 // ── Sortable table ───────────────────────────────────────────────────────────
 function LeaderTable({
-  players, provisional, isCurrentMonth, sort, setSort,
+  players, provisional, dormant = false, isCurrentMonth, sort, setSort,
 }: {
-  players: Player[]; provisional: boolean; isCurrentMonth: boolean
+  players: Player[]; provisional: boolean; dormant?: boolean; isCurrentMonth: boolean
   sort: SortState; setSort: (s: SortState) => void
 }) {
+  // Dormant rows look like the Skill Rating board's: no rank, muted rating.
+  const muted = provisional || dormant
   return (
     <div className="space-y-2">
       <SortControls sort={sort} setSort={setSort} />
@@ -424,7 +436,10 @@ function LeaderTable({
 
         // Standard tile. Live Hot Streak + month badges are written under the
         // name as a caption (see AchievementLine).
-        const hasAch = !provisional && hasBoardCaption(player, isCurrentMonth)
+        const hasAch = !muted && hasBoardCaption(player, isCurrentMonth)
+        const rankCell = dormant
+          ? <span className="font-qaranta text-lg leading-none text-white/25">·</span>
+          : <span className={`font-qaranta text-lg leading-none ${rankColor}`}>{rank ?? '—'}</span>
 
         return (
           <Link key={player.id} href={`/match-iq/${player.id}`}
@@ -434,7 +449,7 @@ function LeaderTable({
               {provisional ? (
                 <span className="w-7 shrink-0 text-center mt-1 font-poppins text-[11px] font-semibold leading-none text-orange/70">{player.matches}<span className="text-white/25">/3</span></span>
               ) : (
-                <span className={`font-qaranta text-lg leading-none w-7 shrink-0 text-center mt-0.5 ${rankColor}`}>{rank ?? '—'}</span>
+                <span className="w-7 shrink-0 text-center mt-0.5">{rankCell}</span>
               )}
               <div className="flex-1 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold break-words leading-snug group-hover:text-orange transition-colors">{player.name}</p>
@@ -447,7 +462,7 @@ function LeaderTable({
                   {player.avgOpp !== null && <><span className="text-white/20 mx-1">·</span><span>opp {player.avgOpp}</span></>}
                 </p>
               </div>
-              <span className={`font-qaranta text-2xl shrink-0 leading-none ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
+              <span className={`font-qaranta text-2xl shrink-0 leading-none ${muted ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
             </div>
 
             {/* Desktop */}
@@ -455,13 +470,13 @@ function LeaderTable({
               {provisional ? (
                 <span className="text-center font-poppins text-[11px] font-semibold leading-none text-orange/70">{player.matches}<span className="text-white/25">/3</span></span>
               ) : (
-                <span className={`font-qaranta text-lg leading-none text-center ${rankColor}`}>{rank ?? '—'}</span>
+                <span className="text-center">{rankCell}</span>
               )}
               <div className="flex flex-col justify-center gap-0.5 min-w-0">
                 <p className="font-poppins text-white text-sm font-semibold group-hover:text-orange transition-colors truncate">{player.name}</p>
                 {hasAch && <AchievementLine player={player} isCurrentMonth={isCurrentMonth} />}
               </div>
-              <span className={`font-qaranta text-xl text-right ${provisional ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
+              <span className={`font-qaranta text-xl text-right ${muted ? 'text-white/50' : 'text-orange'}`}>{player.rating}</span>
               <span className="font-poppins text-white/60 text-sm text-center font-medium">{player.matches}</span>
               <span className="font-poppins text-xs text-center">
                 <span className="text-green-400">{player.wins}</span><span className="text-white/20 mx-1">/</span><span className="text-red-400/70">{player.losses}</span>

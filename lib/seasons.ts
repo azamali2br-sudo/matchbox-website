@@ -8,11 +8,14 @@
 // in routes that already control their output shape.
 
 import { supabaseAdmin } from '@/lib/supabase'
-import { buildStandings, debutMonthMap, type MatchRow, type StandingPlayer } from '@/lib/leaderboard'
+import { getTodayStr } from '@/lib/constants'
+import { buildStandings, debutMonthMap, dormancyAsOf, type MatchRow, type StandingPlayer } from '@/lib/leaderboard'
 
 export type SeasonStandings = {
   mainDraw: StandingPlayer[]
   qualifying: StandingPlayer[]
+  // Absent on snapshots frozen before the dormant rule existed (Jun–Sep 2026).
+  dormant?: StandingPlayer[]
   totalMatches: number
   totalPlayers: number
 }
@@ -48,8 +51,13 @@ export function computeSeasonStandings(
 ): SeasonStandings {
   const debutMonth = debutMonthMap(allMatches)
   const monthMatches = allMatches.filter(m => m.played_on.slice(0, 7) === month)
-  const { mainDraw, qualifying } = buildStandings(monthMatches, { nameById, debutMonth, month })
-  return { mainDraw, qualifying, totalMatches: monthMatches.length, totalPlayers: mainDraw.length + qualifying.length }
+  const { mainDraw, qualifying, dormant } = buildStandings(monthMatches, {
+    nameById, debutMonth, month, asOf: dormancyAsOf(month, getTodayStr()),
+  })
+  return {
+    mainDraw, qualifying, dormant,
+    totalMatches: monthMatches.length, totalPlayers: mainDraw.length + qualifying.length + dormant.length,
+  }
 }
 
 export async function getClosedMonths(): Promise<Set<string>> {

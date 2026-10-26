@@ -1,22 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { getTodayStr } from '@/lib/constants'
-import { buildStandings, debutMonthMap, monthsWithMatches, monthLabel } from '@/lib/leaderboard'
+import { buildStandings, debutMonthMap, monthsWithMatches, monthLabel, daysSince, DORMANT_DAYS } from '@/lib/leaderboard'
 import { loadMatchIqInputs, computeSeasonStandings, getClosedMonths, getSeasonSnapshot } from '@/lib/seasons'
 import type { StandingPlayer } from '@/lib/leaderboard'
-
-// A rated player is "dormant" (parked off the live matchmaking board, rating
-// preserved — NO decay) once this many days pass without a match.
-const DORMANT_DAYS = 15
-
-// Whole days between a YYYY-MM-DD match date and today (both Karachi date-only).
-function daysSince(dateStr: string | null, today: string): number | null {
-  if (!dateStr) return null
-  const a = Date.parse(`${dateStr}T00:00:00Z`)
-  const b = Date.parse(`${today}T00:00:00Z`)
-  if (Number.isNaN(a) || Number.isNaN(b)) return null
-  return Math.max(0, Math.round((b - a) / 86_400_000))
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -45,31 +32,27 @@ export async function GET(request: NextRequest) {
   // matchmaking (the monthly board, above, is the competition/recency number).
   // One continuous Elo replay over every match. Badges are a per-month concept,
   // so they're absent here. Rated players (3+ lifetime matches) are split into
-  // Active (played within DORMANT_DAYS) and Dormant (idle longer — rating kept,
-  // no decay, parked off the live board). Provisional = under 3 lifetime matches.
+  // Active (played within DORMANT_DAYS — the only ones ranked) and Dormant
+  // (idle longer — rating kept, no decay, unranked until their next match).
+  // Provisional = under 3 lifetime matches.
   if (view === 'all') {
     const debutMonth = debutMonthMap(allMatches)
-    const { mainDraw, qualifying } = buildStandings(allMatches, { nameById, debutMonth, month: null })
     const today = getTodayStr()
-    const ratedCount = mainDraw.length
+    const { mainDraw, qualifying, dormant } = buildStandings(allMatches, { nameById, debutMonth, month: null, asOf: today })
+    const activeCount = mainDraw.length
+    const ratedCount = activeCount + dormant.length
     const toSkill = (p: StandingPlayer) => ({
       id: p.id, name: p.name, rating: p.rating,
       wins: p.wins, losses: p.losses, matches: p.matches,
       winRate: p.winRate, avgOpp: p.avgOpp,
       rank: p.rank,
-      // "Top X% of rated players" — the only context shown (no labels/bands).
-      topPct: p.rank ? Math.max(1, Math.round((p.rank / Math.max(1, ratedCount)) * 100)) : null,
+      // "Top X% of active players" — the only context shown (no labels/bands).
+      topPct: p.rank ? Math.max(1, Math.round((p.rank / Math.max(1, activeCount)) * 100)) : null,
       lastPlayedAt: p.lastPlayedAt, daysIdle: daysSince(p.lastPlayedAt, today),
     })
-    // mainDraw is already sorted by rating (standingOrder), so both splits stay
-    // rating-ranked; dormant keeps each player's true overall rank.
-    const rated = mainDraw.map(toSkill)
-    const active = rated.filter(p => (p.daysIdle ?? Infinity) < DORMANT_DAYS)
-    const dormant = rated.filter(p => (p.daysIdle ?? Infinity) >= DORMANT_DAYS)
-    const provisional = qualifying.map(toSkill)
     return NextResponse.json({
       view, label: 'Skill Rating', availableMonths, dormantDays: DORMANT_DAYS,
-      ratedCount, active, dormant, provisional,
+      ratedCount, active: mainDraw.map(toSkill), dormant: dormant.map(toSkill), provisional: qualifying.map(toSkill),
       totalMatches: allMatches.length, totalPlayers: ratedCount + qualifying.length,
     })
   }
