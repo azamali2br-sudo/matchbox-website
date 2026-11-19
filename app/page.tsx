@@ -19,6 +19,7 @@ const localBusiness = {
   "@context": "https://schema.org",
   "@type": "SportsActivityLocation",
   name: "Matchbox Padel Club",
+  alternateName: "Matchbox Padel",
   description: "Pakistan's first tech-driven padel club — two courts, Match IQ ratings and a 1,000+ player community in Malir Cantt, Karachi.",
   url: SITE_URL,
   logo: `${SITE_URL}/icon.png`,
@@ -26,12 +27,16 @@ const localBusiness = {
   telephone: `+${WHATSAPP_NUMBER}`,
   priceRange: `PKR ${OFF_PEAK_PRICE_PER_HOUR.toLocaleString()}–${PEAK_PRICE_PER_HOUR.toLocaleString()} per hour`,
   currenciesAccepted: "PKR",
+  // Must match the Google Business Profile exactly (name/address/phone consistency).
   address: {
     "@type": "PostalAddress",
-    addressLocality: "Malir Cantt, Karachi",
+    streetAddress: "Lawn #2, Ordnance Mart, Naseeb Shaheed Chowk",
+    addressLocality: "Malir Cantonment, Karachi",
     addressRegion: "Sindh",
+    postalCode: "75080",
     addressCountry: "PK",
   },
+  geo: { "@type": "GeoCoordinates", latitude: 24.920346, longitude: 67.198371 },
   hasMap: "https://maps.app.goo.gl/fv8JrRiBJFiSrWJh7",
   openingHoursSpecification: [{
     "@type": "OpeningHoursSpecification",
