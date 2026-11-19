@@ -26,8 +26,8 @@ export default function Navbar() {
 
   // Lightweight session probe so the nav shows "My Account" vs "Log in".
   useEffect(() => {
-    fetch("/api/account/me")
-      .then((r) => setLoggedIn(r.ok))
+    fetch("/api/account/me?optional=1")
+      .then(async (r) => setLoggedIn(r.ok && !!(await r.json()).account))
       .catch(() => setLoggedIn(false));
   }, [pathname]);
 

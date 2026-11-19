@@ -118,8 +118,8 @@ export default async function SeasonRecapPage({ params }: { params: Promise<{ mo
                             <span className="font-poppins text-xs font-semibold uppercase tracking-wide shrink-0">{title}</span>
                             <span className="font-poppins text-[11px] opacity-60 truncate hidden sm:inline">— {def.desc}</span>
                           </span>
-                          <span className="flex items-center gap-2 shrink-0">
-                            <span className="font-poppins text-sm text-white font-semibold truncate max-w-[10rem]">{winners.map(w => w.name).join(' & ')}</span>
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className="font-poppins text-sm text-white font-semibold truncate max-w-[10rem] sm:max-w-[16rem]">{winners.map(w => w.name).join(' & ')}</span>
                             <span className="text-[9px] text-white/40 group-open:rotate-180 transition-transform">▼</span>
                           </span>
                         </summary>

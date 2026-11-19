@@ -132,12 +132,12 @@ export default function SubmitMatchPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/account/me')
+    fetch('/api/account/me?optional=1')
       .then(async res => {
         if (cancelled) return
         if (!res.ok) { setMe(null); return }
         const data = await res.json()
-        setMe(data.account?.name ?? '')
+        setMe(data.account ? (data.account.name ?? '') : null)
       })
       .catch(() => { if (!cancelled) setMe(null) })
     return () => { cancelled = true }

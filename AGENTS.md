@@ -26,7 +26,7 @@ This is enforced for `app/api/**/*.ts` by `@typescript-eslint/no-floating-promis
 - **Double bookings are prevented server-side.** POST releases lapsed holds, then checks the new slot against every non-cancelled booking on that court for the same date ±1 day (slots cross midnight; `end_time` wraps, so use `duration_hours` for span math) and returns 409 on a clash. Postgres error `23P01` (exclusion constraint) maps to the same 409. Only POST inserts bookings — keep it that way so this stays the single choke point.
 - **Closure is 09:00–15:00 PKT and the server rejects any booking that *ends* after 09:00.** The page therefore treats 08:30 starts as closed (min booking is 1h). Keep client `isClosedHour` and the server rule in sync when either changes.
 - **Client range check** (`isSlotRangeAvailable`) walks every 30-minute `TIME_SLOTS` entry the booking covers — `Math.round(hours * 2)` steps, not `Math.ceil(hours)`. The old loop only checked half the duration.
-- **Rate limit** on booking POSTs is 5/hour per IP, in-memory per lambda. The venue WiFi and Pakistani carrier CGNAT put many players behind one IP; raise or re-scope it before it bites.
+- **No rate limit on booking POSTs** (removed 2026-11-19 at Azam's request — the per-IP cap blocked players sharing the venue WiFi / carrier CGNAT). Online bookings require a login; don't reintroduce a per-IP limit.
 
 # Credit, holds and account rules (bugs found + fixed 2026-11-19)
 

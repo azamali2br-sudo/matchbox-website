@@ -8,7 +8,6 @@ import { getAccountById } from '@/lib/accounts'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
 import { releaseLapsedHolds, clearHoldIfSettled } from '@/lib/holds'
 import { normalizePhone } from '@/lib/phone'
-import { rateLimit } from '@/lib/rate-limit'
 import { cookies } from 'next/headers'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -119,9 +118,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, 'booking-create', 5, 60 * 60 * 1000)
-  if (limited) return limited
-
+  // No per-IP rate limit here (removed 2026-11-19, Azam's call): the venue WiFi
+  // and mobile-carrier CGNAT put many players behind one IP, so a 5/hour cap
+  // blocked real players. Online bookings already need a logged-in account,
+  // and overlaps are rejected server-side below.
   const body = await request.json()
   const { court, date, startTime, durationHours, termsAccepted } = body
 

@@ -74,7 +74,7 @@ export default function BookingClient() {
   // Who's booking? Online booking requires a logged-in account; identity is
   // taken from the session server-side, so we just prefill the display here.
   useEffect(() => {
-    fetch('/api/account/me')
+    fetch('/api/account/me?optional=1')
       .then(async r => {
         if (r.ok) {
           const d = await r.json()
@@ -231,7 +231,7 @@ export default function BookingClient() {
       setErrors({})
       fetchSlots()
       // refresh credit balance (it may have been spent on the booking just made)
-      fetch('/api/account/me').then(async r => { if (r.ok) { const d = await r.json(); setCreditBalance(d.credit?.balance ?? 0) } })
+      fetch('/api/account/me?optional=1').then(async r => { if (r.ok) { const d = await r.json(); setCreditBalance(d.credit?.balance ?? 0) } })
     }} />
   }
 
@@ -444,9 +444,9 @@ export default function BookingClient() {
                       </svg>
                     </button>
                   </div>
-                  <p className="font-qaranta text-white text-2xl">
-                    {formatTime(selectedSlot)}
-                    {endTime && <span className="text-white/50"> → {formatTime(endTime)}</span>}
+                  <p className="font-qaranta text-white text-xl sm:text-2xl">
+                    <span className="whitespace-nowrap">{formatTime(selectedSlot)}</span>
+                    {endTime && <span className="text-white/50 whitespace-nowrap"> → {formatTime(endTime)}</span>}
                   </p>
                 </div>
 
@@ -480,12 +480,12 @@ export default function BookingClient() {
                   {/* Price */}
                   {price !== null && (
                     <>
-                      <div className="bg-navy rounded-2xl p-4 mb-3 flex items-center justify-between">
-                        <div>
+                      <div className="bg-navy rounded-2xl p-4 mb-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
                           <p className="font-poppins text-white/40 text-xs">Total</p>
-                          <p className="font-qaranta text-3xl text-orange mt-0.5">{formatCurrency(price)}</p>
+                          <p className="font-qaranta text-2xl sm:text-3xl text-orange mt-0.5 whitespace-nowrap">{formatCurrency(price)}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           {rateType === 'mixed' ? (
                             <>
                               <p className="font-poppins text-white/40 text-xs">Mixed rate</p>

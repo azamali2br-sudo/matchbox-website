@@ -137,11 +137,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-navy-card border border-white/8 rounded-xl p-1 mb-6 overflow-x-auto">
+        {/* Wraps onto extra rows on phones so every tab is visible (it used to
+            scroll sideways with no hint that more tabs existed). */}
+        <div className="flex flex-wrap md:flex-nowrap gap-1 bg-navy-card border border-white/8 rounded-xl p-1 mb-6 md:overflow-x-auto">
           {(['today', 'newbooking', 'outstanding', 'cancellations', 'customers', 'matchiq', 'americano'] as AdminTab[]).map(t => (
             <button
               key={t} onClick={() => setTab(t)}
-              className={`font-poppins text-xs font-semibold px-4 py-2.5 rounded-lg transition-all whitespace-nowrap ${
+              className={`font-poppins text-xs font-semibold px-3.5 md:px-4 py-2.5 rounded-lg transition-all whitespace-nowrap flex-grow md:flex-grow-0 ${
                 tab === t ? 'bg-orange text-white' : 'text-white/40 hover:text-white/70'
               }`}
             >
