@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizePhone } from './phone'
 import { newMagicToken, MAGIC_TOKEN_TTL_MINUTES } from './account-auth'
 import { getCreditBalance } from './credits'
+import { releaseLapsedHolds } from './holds'
 
 export interface Account {
   id: string
@@ -143,6 +144,8 @@ export async function consumeMagicToken(db: SupabaseClient, token: string): Prom
 // Everything a logged-in player sees: profile, credit, Match IQ, booking history.
 export async function getAccountDashboard(db: SupabaseClient, account: Account) {
   const phone = account.phone
+  // Release lapsed payment holds first so an expired booking never shows as active.
+  await releaseLapsedHolds(db)
 
   // Match IQ (joined by phone)
   const { data: player } = await db

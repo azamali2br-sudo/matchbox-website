@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
-import { clearHoldIfSettled } from '@/lib/holds'
+import { clearHoldIfSettled, releaseLapsedHolds } from '@/lib/holds'
 import { rateLimit } from '@/lib/rate-limit'
 
 const TOKEN_RE = /^[a-f0-9]{32,64}$/
@@ -15,6 +15,7 @@ export async function GET(
   if (!TOKEN_RE.test(token)) return NextResponse.json({ error: 'Invalid token' }, { status: 400 })
 
   const { supabaseAdmin } = await import('@/lib/supabase')
+  await releaseLapsedHolds(supabaseAdmin)
   const { data: booking, error } = await supabaseAdmin
     .from('bookings')
     .select('id, phone, grand_total, paid_amount, credit_applied, attendance')
@@ -53,6 +54,7 @@ export async function POST(
   }
 
   const { supabaseAdmin } = await import('@/lib/supabase')
+  await releaseLapsedHolds(supabaseAdmin)
   const { data: booking, error } = await supabaseAdmin
     .from('bookings')
     .select('*')

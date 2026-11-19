@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { applyCancellationCredits, cancellationTierPercent, tierLabel, hoursUntilSlot } from '@/lib/credits'
 import { rateLimit } from '@/lib/rate-limit'
+import { releaseLapsedHolds } from '@/lib/holds'
 
 // Public — auth via opaque token in URL. One token per booking.
 // GET fetches the booking details for the manage page.
@@ -10,6 +11,8 @@ const TOKEN_RE = /^[a-f0-9]{32,64}$/
 
 async function fetchBooking(token: string) {
   const { supabaseAdmin } = await import('@/lib/supabase')
+  // An expired hold must read as expired here too, not only on the booking page.
+  await releaseLapsedHolds(supabaseAdmin)
   const { data, error } = await supabaseAdmin
     .from('bookings')
     .select('*')
