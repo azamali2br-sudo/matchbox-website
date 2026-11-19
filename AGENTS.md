@@ -10,10 +10,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 This is enforced for `app/api/**/*.ts` by `@typescript-eslint/no-floating-promises` in [eslint.config.mjs](eslint.config.mjs). If you have a genuinely background side effect that shouldn't block the response, use Next.js's `after()` from `next/server` (it tells the runtime to keep running until the callback resolves). Never just `.then(...)` and drop the promise.
 
-# Deploy + environment facts (verified 2026-09-22)
+# Deploy + environment facts (updated 2026-11-19)
 
-- **Working branch is `v2`**, not `main`. Pushing `v2` only creates a *Preview* deployment. Production is promoted manually: `git push origin v2 && vercel --prod --yes`. Live URL: https://matchbox-website.vercel.app.
-- **matchboxpadel.com is NOT pointed at Vercel** — its DNS resolves to a Namecheap parking page. `NEXT_PUBLIC_SITE_URL` is the vercel.app URL for that reason.
+- **Working branch is `v2`**, not `main`. Pushing `v2` only creates a *Preview* deployment. Production is promoted manually: `git push origin v2 && vercel --prod --yes`. Live URL: **https://www.matchboxpadel.com** (bare matchboxpadel.com 308-redirects to www; matchbox-website.vercel.app still serves the same deployment so old email links keep working).
+- **Domain went live 2026-11-19.** DNS is at Namecheap: A `@` 216.198.79.1, CNAME `www` → Vercel, two `_vercel` TXT verification records (the domain had been claimed by another Vercel account). Never touch the MX (Private Email + `send` for Resend), SPF, `default._domainkey` or `resend._domainkey` records. `NEXT_PUBLIC_SITE_URL` = `https://www.matchboxpadel.com` (set with printf — no trailing newline). It is build-time, so changing it needs a redeploy. Cookies are host-only, so sessions belong to www.
 - **Prod Supabase project ref is `ilremifudktcbwkmtmbg`.** Other unrelated projects exist under the same login — confirm the ref before any SQL. Keys are the new format (`sb_publishable_…` / `sb_secret_…`).
 - **`.env.local` comes from `vercel env pull`** and stores values quoted with a literal `\n` escape inside (e.g. `"https://….supabase.co\n"`). Next.js's dotenv handles it; shell scripts must strip the quotes and the `\n` or curl fails with "URL malformed".
 - **Vercel logs are short-lived** (Hobby ≈ 1 hour). `vercel logs --environment production --no-branch --no-follow --since 1h -x` reads them; `vercel logs <deployment-url>` streams live but the CLI auto-kills the stream after 5 minutes. Don't rely on logs for anything older than an hour.
