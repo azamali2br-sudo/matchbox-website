@@ -6,6 +6,7 @@ import { verifySessionToken, ADMIN_COOKIE } from '@/lib/admin-auth'
 import { getCurrentAccountId } from '@/lib/account-auth'
 import { getAccountById } from '@/lib/accounts'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { releaseLapsedHolds, clearHoldIfSettled } from '@/lib/holds'
 import { normalizePhone } from '@/lib/phone'
 import { rateLimit } from '@/lib/rate-limit'
 import { cookies } from 'next/headers'
@@ -89,32 +90,8 @@ export async function GET(request: NextRequest) {
 
   const { supabase, supabaseAdmin } = await import('@/lib/supabase')
 
-  // Expire pending holds — flip attendance='cancelled' on any 'booked' row
-  // whose hold lapsed without payment. .select() returns the freshly-cancelled
-  // rows so we can fire one email per release.
-  const { data: expired } = await supabaseAdmin
-    .from('bookings')
-    .update({ attendance: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'admin' })
-    .eq('attendance', 'booked')
-    .eq('paid_amount', 0)
-    .lt('hold_expires_at', new Date().toISOString())
-    .select()
-
-  if (expired && expired.length > 0) {
-    try {
-      const { sendBookingExpired } = await import('@/lib/email')
-      await Promise.all(expired.map(row => {
-        const b = toBooking(row as Record<string, unknown>)
-        return sendBookingExpired({
-          ref: b.ref, court: b.court, date: b.date, startTime: b.startTime,
-          endTime: b.endTime, durationHours: b.durationHours, name: b.name,
-          email: b.email, totalPrice: b.grandTotal,
-        }).catch(err => console.error('[email] expired send failed:', err))
-      }))
-    } catch (err) {
-      console.error('[email] expired batch failed:', err)
-    }
-  }
+  // Release lapsed payment holds (returns any applied credit + emails each customer).
+  await releaseLapsedHolds(supabaseAdmin)
 
   // Admin sees everything (full row, includes cancelled for history).
   // Public callers see only slot-availability fields, non-cancelled.
@@ -263,12 +240,7 @@ export async function POST(request: NextRequest) {
   // simultaneous requests — this check just gives a clean, early message.
   {
     const { supabaseAdmin } = await import('@/lib/supabase')
-    await supabaseAdmin
-      .from('bookings')
-      .update({ attendance: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'admin' })
-      .eq('attendance', 'booked')
-      .eq('paid_amount', 0)
-      .lt('hold_expires_at', new Date().toISOString())
+    await releaseLapsedHolds(supabaseAdmin)
 
     const shiftDate = (days: number) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10) }
     const prevDateStr = shiftDate(-1)
@@ -344,24 +316,38 @@ export async function POST(request: NextRequest) {
         })
         booking.creditApplied = newCreditApplied
         booking.status = deriveStatus({ attendance: booking.attendance, paidAmount: booking.paidAmount, creditApplied: newCreditApplied, grandTotal: booking.grandTotal })
+        // Fully covered by credit → nothing left to pay, so drop the hold
+        // (otherwise the booking auto-releases in 30 min and the credit is lost).
+        if (await clearHoldIfSettled(supabaseAdmin, {
+          bookingId: booking.id, grandTotal: booking.grandTotal,
+          paidAmount: booking.paidAmount, creditApplied: newCreditApplied,
+        })) {
+          booking.holdExpiresAt = undefined
+        }
       }
     } catch (err) {
       console.error('[credit] redeem at checkout failed:', err)
     }
   }
 
-  // Pending-payment email — online bookings with an email on file only.
+  // Customer email — online bookings with an email on file only.
   // (Manual/admin bookings are arranged directly, so no automated email.)
+  // Fully settled by credit → "confirmed"; otherwise "pending" for what's still owed.
   if (source === 'online' && booking.email) {
+    const owed = Math.max(0, booking.grandTotal - booking.paidAmount - booking.creditApplied)
     try {
-      const { sendBookingConfirmation } = await import('@/lib/email')
-      await sendBookingConfirmation({
+      const { sendBookingConfirmation, sendBookingConfirmed } = await import('@/lib/email')
+      const base = {
         ref: booking.ref, court: booking.court, date: booking.date,
         startTime: booking.startTime, endTime: booking.endTime,
         durationHours: booking.durationHours, name: booking.name,
-        email: booking.email, totalPrice: booking.grandTotal,
-        holdExpiresAt: booking.holdExpiresAt, cancelToken: booking.cancelToken,
-      })
+        email: booking.email, cancelToken: booking.cancelToken,
+      }
+      if (owed === 0) {
+        await sendBookingConfirmed({ ...base, totalPrice: booking.grandTotal, creditEarned: 0 })
+      } else {
+        await sendBookingConfirmation({ ...base, totalPrice: owed, creditUsed: booking.creditApplied, holdExpiresAt: booking.holdExpiresAt })
+      }
     } catch (err) {
       console.error('[email] send failed:', err)
     }

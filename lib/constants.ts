@@ -9,11 +9,27 @@ export const BOOKING_INCREMENT = 0.5
 export const WHATSAPP_NUMBER = '923222172629'
 export const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}`
 
+// Bank transfer details shown on the booking screen and in the payment email.
+// Real account supplied by Azam 2026-11-19 (replaced a placeholder IBAN,
+// PK00MEZN0001234567890123, that customers had been told to pay into). If `iban`
+// is ever emptied, both places fall back to "WhatsApp us for payment details".
 export const BANK_DETAILS = {
-  bankName: 'Meezan Bank',
-  accountTitle: 'Matchbox Padel Club',
-  accountNumber: '03222172629',
-  iban: 'PK00MEZN0001234567890123',
+  bankName: 'Bank Al-Habib',
+  accountTitle: 'Malik Muhammad Azam Ali Khan',
+  accountNumber: '11980981001397015',
+  iban: 'PK70BAHL11980981001397015',
+}
+
+export function hasBankDetails(): boolean {
+  return BANK_DETAILS.iban.trim().length > 0 && !/^PK00/.test(BANK_DETAILS.iban)
+}
+
+export const VENUE_TIME_ZONE = 'Asia/Karachi'
+
+// Clock time in Karachi for an ISO timestamp, e.g. "7:17 PM". The server runs
+// in UTC, so toLocaleTimeString without a timeZone printed times 5 hours early.
+export function formatClockPKT(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: VENUE_TIME_ZONE })
 }
 
 export const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3]

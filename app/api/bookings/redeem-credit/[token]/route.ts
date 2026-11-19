@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
+import { clearHoldIfSettled } from '@/lib/holds'
 import { rateLimit } from '@/lib/rate-limit'
 
 const TOKEN_RE = /^[a-f0-9]{32,64}$/
@@ -78,10 +79,15 @@ export async function POST(
     currentCreditApplied: booking.credit_applied,
   })
 
-  // If applied credit fully settles the booking, send the confirmed email.
+  // If applied credit fully settles the booking, drop the payment hold (so it
+  // can't auto-release and swallow the credit) and send the confirmed email.
   // (Prepay reward is NOT issued for credit-only settlement.)
   const newOwed = booking.grand_total - booking.paid_amount - newCreditApplied
   if (newOwed <= 0) {
+    await clearHoldIfSettled(supabaseAdmin, {
+      bookingId: booking.id, grandTotal: booking.grand_total,
+      paidAmount: booking.paid_amount, creditApplied: newCreditApplied,
+    })
     try {
       const { sendBookingConfirmed } = await import('@/lib/email')
       await sendBookingConfirmed({

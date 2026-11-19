@@ -1,5 +1,5 @@
 import { Resend } from 'resend'
-import { BANK_DETAILS, WHATSAPP_NUMBER, formatCurrency, formatDate, formatTime } from './constants'
+import { BANK_DETAILS, WHATSAPP_NUMBER, formatClockPKT, formatCurrency, formatDate, formatTime, hasBankDetails } from './constants'
 
 type BookingForEmail = {
   ref: string
@@ -16,13 +16,16 @@ type BookingForEmail = {
   creditEarned?: number
   refundCredit?: number
   tierLabel?: string
+  creditUsed?: number
 }
 
 const NAVY = '#181F49'
 const ORANGE = '#F68E3B'
 const GREEN = '#10B981'
 const RED = '#EF4444'
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://matchboxpadel.com'
+// trim(): the Vercel value was saved with a trailing newline, which put a line
+// break inside every manage link in emails.
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://matchboxpadel.com').trim().replace(/\/+$/, '')
 const MAPS_LINK = 'https://maps.app.goo.gl/fv8JrRiBJFiSrWJh7'
 
 function courtLabel(c: 'A' | 'B'): string {
@@ -74,31 +77,39 @@ function manageBlock(b: BookingForEmail): string {
 }
 
 function renderPendingHtml(b: BookingForEmail): string {
-  const expiryLine = b.holdExpiresAt
-    ? new Date(b.holdExpiresAt).toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit' })
-    : '30 minutes from now'
-  const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    `Hi! Payment screenshot for booking ${b.ref} (${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)}–${formatTime(b.endTime)})`,
-  )}`
-  const rewardLine = `<div style="margin:0 0 20px;padding:12px 14px;background:${ORANGE}1a;border-radius:8px;font-size:13px;color:#7a3e0e">
-    <strong>Pay in full to earn ${formatCurrency(Math.round(b.totalPrice * 0.15))} credit</strong> on your next booking (90-day expiry).
-  </div>`
-  const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
-    <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your slot is reserved. To confirm, please complete payment within <strong>30 minutes</strong> (by <strong>${expiryLine}</strong>) and send the screenshot on WhatsApp.</p>
-    ${bookingDetailsTable(b)}
-    ${rewardLine}
-    <div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Bank transfer</div>
+  const expiryLine = b.holdExpiresAt ? formatClockPKT(b.holdExpiresAt) : '30 minutes from now'
+  const creditLine = b.creditUsed && b.creditUsed > 0
+    ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#374151">${formatCurrency(b.creditUsed)} of credit has been applied. The amount below is what's left to pay.</p>`
+    : ''
+  const paymentBlock = hasBankDetails()
+    ? `<div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Bank transfer</div>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;margin:0 0 20px">
       <tr><td style="padding:14px 16px">
         <div style="font-size:14px;line-height:1.7">
           <strong>${BANK_DETAILS.bankName}</strong><br>
           Title: ${BANK_DETAILS.accountTitle}<br>
+          Account no: <span style="font-family:monospace">${BANK_DETAILS.accountNumber}</span><br>
           IBAN: <span style="font-family:monospace">${BANK_DETAILS.iban}</span>
         </div>
       </td></tr>
-    </table>
+    </table>`
+    : `<div style="margin:0 0 20px;padding:14px 16px;background:#f9fafb;border-radius:8px;font-size:14px;line-height:1.6">
+        <strong>How to pay:</strong> message us on WhatsApp with your booking ref and we'll send payment details right away.
+      </div>`
+  const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+    `Hi! ${hasBankDetails() ? 'Payment screenshot for' : 'Please send payment details for'} booking ${b.ref} (${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)}–${formatTime(b.endTime)})`,
+  )}`
+  const rewardLine = `<div style="margin:0 0 20px;padding:12px 14px;background:${ORANGE}1a;border-radius:8px;font-size:13px;color:#7a3e0e">
+    <strong>Pay in full to earn ${formatCurrency(Math.round(b.totalPrice * 0.15))} credit</strong> on your next booking (90-day expiry).
+  </div>`
+  const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your slot is reserved. To confirm, please complete payment within <strong>30 minutes</strong> (by <strong>${expiryLine}</strong>)${hasBankDetails() ? ' and send the screenshot on WhatsApp' : ' — WhatsApp us and we’ll send you the payment details'}.</p>
+    ${creditLine}
+    ${bookingDetailsTable(b)}
+    ${rewardLine}
+    ${paymentBlock}
     <div style="text-align:center;margin:24px 0 8px">
-      <a href="${waLink}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">Send screenshot on WhatsApp</a>
+      <a href="${waLink}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">${hasBankDetails() ? 'Send screenshot on WhatsApp' : 'WhatsApp us to pay'}</a>
     </div>
     <p style="margin:8px 0 0;font-size:12px;color:#6b7280;text-align:center">Or message us at +${WHATSAPP_NUMBER}</p>
     ${manageBlock(b)}
@@ -142,6 +153,9 @@ function renderExpiredHtml(b: BookingForEmail): string {
   const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your 30-minute payment window expired, so the slot below has been released. No charge was made.</p>
     ${bookingDetailsTable(b, false)}
+    ${b.refundCredit && b.refundCredit > 0
+      ? `<div style="margin:0 0 20px;padding:14px 16px;background:${ORANGE}1a;border-radius:8px;font-size:14px;color:#7a3e0e"><strong style="color:${ORANGE}">${formatCurrency(b.refundCredit)} credit returned</strong> to your account. Valid for 90 days.</div>`
+      : ''}
     <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#6b7280">If you still want to play, you can book again — slots open up fast.</p>
     <div style="text-align:center;margin:24px 0 8px">
       <a href="${bookAgainLink}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">Book a slot</a>

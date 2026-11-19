@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
-import { isValidPkMobile } from '@/lib/phone'
-import { createOrClaimAccount, issueMagicToken } from '@/lib/accounts'
+import { isValidPkMobile, normalizePhone } from '@/lib/phone'
+import { createOrClaimAccount, findAccountByEmail, issueMagicToken } from '@/lib/accounts'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -26,18 +26,35 @@ export async function POST(request: NextRequest) {
   }
 
   const { supabaseAdmin } = await import('@/lib/supabase')
+
+  // An email belongs to one account (unique lower(email)). If it's already on a
+  // different number, point them to login instead of failing the insert.
+  const emailOwner = await findAccountByEmail(supabaseAdmin, email)
+  if (emailOwner && emailOwner.phone !== normalizePhone(phone)) {
+    return NextResponse.json(
+      { error: 'That email is already linked to another account. Use Log in instead.' },
+      { status: 409 },
+    )
+  }
+
   const { account, claimed } = await createOrClaimAccount(supabaseAdmin, { name, phone, email })
 
+  // Existing account with an email on file → the link only ever goes to THAT
+  // email. Otherwise it goes to the address just typed, which is attached to the
+  // account only when the link is clicked.
+  const deliverTo = account.email || email
   const token = await issueMagicToken(supabaseAdmin, {
     accountId: account.id,
-    email: account.email || email,
+    email: deliverTo,
     purpose: claimed ? 'claim' : 'signup',
   })
 
   const base = new URL(request.url).origin
   const link = `${base}/api/account/verify/${token}`
   const { sendMagicLink } = await import('@/lib/email')
-  await sendMagicLink({ to: account.email || email, name: account.name, link, isSignup: true })
+  await sendMagicLink({ to: deliverTo, name: account.name, link, isSignup: true })
 
-  return NextResponse.json({ ok: true, claimed, email: account.email || email })
+  // Same response whether or not the phone was already registered, and never
+  // the address on file — otherwise typing any number reveals its owner's email.
+  return NextResponse.json({ ok: true })
 }

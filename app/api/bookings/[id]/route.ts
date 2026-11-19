@@ -87,30 +87,45 @@ export async function PATCH(
     )
   }
 
-  // If admin is cancelling, stamp cancellation metadata.
-  let cancellationResult: { refundCredit: number; reversedReward: number; net: number } | null = null
-  if (update.attendance === 'cancelled' && prev.attendance !== 'cancelled') {
-    const hours = hoursUntilSlot(prev.date, prev.start_time)
+  // If admin is cancelling, stamp cancellation metadata. The update is guarded on
+  // the attendance we just read, so a double-click (or a customer cancelling at
+  // the same moment) can't run the credit logic twice — only the request that
+  // actually flips the row issues credit, and only after the flip.
+  const isCancelling = update.attendance === 'cancelled' && prev.attendance !== 'cancelled'
+  const hours = hoursUntilSlot(prev.date, prev.start_time)
+  if (isCancelling) {
     update.cancelled_at = new Date().toISOString()
     update.cancelled_by = 'admin'
     update.hours_before_slot_at_cancel = hours
-    cancellationResult = await applyCancellationCredits(supabaseAdmin, {
-      bookingId: id,
-      phone: prev.phone,
-      paidAmount: prev.paid_amount,
-      creditApplied: prev.credit_applied ?? 0,
-      hoursBeforeSlot: hours,
-    })
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('bookings')
-    .update(update)
-    .eq('id', id)
-    .select()
-    .single()
+  let q = supabaseAdmin.from('bookings').update(update).eq('id', id)
+  if (isCancelling) q = q.eq('attendance', prev.attendance)
+  const { data, error } = await q.select().maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) {
+    return NextResponse.json({ error: 'This booking changed in the meantime — refresh and try again.' }, { status: 409 })
+  }
+
+  let cancellationResult: { refundCredit: number; reversedReward: number; net: number } | null = null
+  if (isCancelling) {
+    try {
+      cancellationResult = await applyCancellationCredits(supabaseAdmin, {
+        bookingId: id,
+        phone: prev.phone,
+        paidAmount: prev.paid_amount,
+        creditApplied: prev.credit_applied ?? 0,
+        hoursBeforeSlot: hours,
+      })
+    } catch (err) {
+      console.error('[admin cancel] booking cancelled but credit issue failed:', { bookingId: id, err })
+      return NextResponse.json(
+        { error: 'Booking cancelled, but the credit entry failed — add it by hand from Customers.', booking: data },
+        { status: 500 },
+      )
+    }
+  }
 
   return NextResponse.json({ booking: data, cancellation: cancellationResult })
 }

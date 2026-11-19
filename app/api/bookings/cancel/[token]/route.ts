@@ -107,15 +107,11 @@ export async function POST(
     return NextResponse.json({ error: 'Slot has already started — contact us on WhatsApp' }, { status: 400 })
   }
 
-  const result = await applyCancellationCredits(supabaseAdmin, {
-    bookingId: booking.id,
-    phone: booking.phone,
-    paidAmount: booking.paid_amount,
-    creditApplied: booking.credit_applied ?? 0,
-    hoursBeforeSlot: hours,
-  })
-
-  const { error: uErr } = await supabaseAdmin
+  // Claim the cancellation atomically BEFORE issuing any credit. The
+  // `attendance = 'booked'` guard means only one request can flip the row; a
+  // second concurrent tap gets no row back and issues nothing. (Issuing credit
+  // first let two simultaneous taps both refund — reproduced on prod 2026-11-19.)
+  const { data: claimedRow, error: uErr } = await supabaseAdmin
     .from('bookings')
     .update({
       attendance: 'cancelled',
@@ -124,7 +120,30 @@ export async function POST(
       hours_before_slot_at_cancel: hours,
     })
     .eq('id', booking.id)
+    .eq('attendance', 'booked')
+    .select('id')
+    .maybeSingle()
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+  if (!claimedRow) {
+    return NextResponse.json({ error: 'This booking is already cancelled' }, { status: 400 })
+  }
+
+  let result: { refundCredit: number; reversedReward: number; net: number }
+  try {
+    result = await applyCancellationCredits(supabaseAdmin, {
+      bookingId: booking.id,
+      phone: booking.phone,
+      paidAmount: booking.paid_amount,
+      creditApplied: booking.credit_applied ?? 0,
+      hoursBeforeSlot: hours,
+    })
+  } catch (err) {
+    console.error('[cancel] booking cancelled but credit issue failed:', { bookingId: booking.id, ref: booking.ref, err })
+    return NextResponse.json(
+      { error: 'Your booking is cancelled, but we couldn’t add your credit automatically. Please WhatsApp us and we’ll sort it.' },
+      { status: 500 },
+    )
+  }
 
   // Customer email — confirms cancellation + credit awarded.
   try {

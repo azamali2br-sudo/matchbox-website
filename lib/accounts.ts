@@ -23,10 +23,26 @@ export async function findAccountByPhone(db: SupabaseClient, phone: string): Pro
   return data as Account | null
 }
 
+// Exact, case-insensitive email match. ILIKE treats `_` and `%` as wildcards, so
+// they (and the escape char itself) must be escaped — otherwise a lookalike
+// address such as `ali_khan@x.com` matches `ali.khan@x.com` and receives that
+// account's login link (account takeover, reproduced on prod 2026-11-19).
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, ch => `\\${ch}`)
+}
+
 export async function findAccountByEmail(db: SupabaseClient, email: string): Promise<Account | null> {
-  const { data, error } = await db.from('accounts').select('*').ilike('email', email.trim()).maybeSingle()
+  const wanted = email.trim().toLowerCase()
+  const { data, error } = await db
+    .from('accounts')
+    .select('*')
+    .ilike('email', escapeLikePattern(email.trim()))
+    .limit(50)
   if (error) throw error
-  return data as Account | null
+  // PostgREST also treats `*` as a wildcard in ilike patterns, so never trust
+  // the pattern match alone — the final decision is an exact comparison.
+  const match = ((data ?? []) as Account[]).find(a => (a.email ?? '').trim().toLowerCase() === wanted)
+  return match ?? null
 }
 
 export async function getAccountById(db: SupabaseClient, id: string): Promise<Account | null> {
@@ -36,11 +52,12 @@ export async function getAccountById(db: SupabaseClient, id: string): Promise<Ac
 }
 
 // Sign-up / claim. Phone is the key:
-//  - phone already has an account (e.g. a pre-seeded player) → claim it:
-//    attach the email if missing, refresh the name. Stays unverified until the
-//    magic link is clicked.
+//  - phone already has an account (e.g. a pre-seeded player) → claim it. The
+//    account row is NOT changed here: an email is only attached once its magic
+//    link is clicked (consumeMagicToken), so typing someone else's number can't
+//    pin an unverified address onto their account.
 //  - new phone → create a fresh account.
-// Returns { account, claimed } where claimed=true means they took over a pre-seeded row.
+// Returns { account, claimed } where claimed=true means the phone already existed.
 export async function createOrClaimAccount(
   db: SupabaseClient,
   args: { name: string; phone: string; email: string },
@@ -51,14 +68,6 @@ export async function createOrClaimAccount(
 
   const existing = await findAccountByPhone(db, phone)
   if (existing) {
-    const updates: Record<string, unknown> = {}
-    if (!existing.email) updates.email = email
-    if (!existing.name && name) updates.name = name
-    if (Object.keys(updates).length > 0) {
-      const { data, error } = await db.from('accounts').update(updates).eq('id', existing.id).select().single()
-      if (error) throw error
-      return { account: data as Account, claimed: true }
-    }
     return { account: existing, claimed: true }
   }
 
@@ -112,7 +121,14 @@ export async function consumeMagicToken(db: SupabaseClient, token: string): Prom
 
   const accountUpdates: Record<string, unknown> = { verified_at: new Date().toISOString() }
   const acct = await getAccountById(db, row.account_id)
-  if (acct && !acct.email && row.email) accountUpdates.email = row.email
+  if (acct && !acct.email && row.email) {
+    // A claim link for an account that already has an email is only ever sent
+    // to that email, so this branch is the first verified address for the row.
+    // Refuse if another account already owns this address (unique lower(email)).
+    const other = await findAccountByEmail(db, row.email)
+    if (other && other.id !== acct.id) return null
+    accountUpdates.email = row.email
+  }
 
   const { data: updated, error: upErr } = await db
     .from('accounts')

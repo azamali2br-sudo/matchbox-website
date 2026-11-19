@@ -9,7 +9,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
-  const [claimed, setClaimed] = useState(false)
   const [error, setError] = useState('')
 
   async function submit(e: React.FormEvent) {
@@ -24,7 +23,6 @@ export default function SignupPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Could not create your account'); return }
-      setClaimed(!!data.claimed)
       setSent(true)
     } catch {
       setError('Network error. Please try again.')
@@ -43,13 +41,11 @@ export default function SignupPage() {
           <h1 className="font-qaranta text-3xl text-white mb-3">Almost there — check your email</h1>
           <p className="font-poppins text-white/60 text-sm leading-relaxed">
             We&apos;ve sent a verification link to <span className="text-white">{email}</span>.
-            Tap it to {claimed ? 'unlock your profile' : 'finish setting up your account'} — it&apos;s ready and waiting.
+            Tap it to finish setting up your account — your Match IQ rating and history come with your number.
           </p>
-          {claimed && (
-            <p className="font-poppins text-white/45 text-xs mt-5 leading-relaxed">
-              Welcome back — your Match IQ rating and history are already linked to this number.
-            </p>
-          )}
+          <p className="font-poppins text-white/45 text-xs mt-5 leading-relaxed">
+            Already played with us and gave an email before? Then the link went to that email instead.
+          </p>
           <p className="font-poppins text-white/40 text-xs mt-6">
             Link expires in 30 minutes. Already verified? <Link href="/login" className="text-orange hover:text-orange-dark">Log in</Link>
           </p>
