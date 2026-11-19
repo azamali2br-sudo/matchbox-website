@@ -179,7 +179,7 @@ export async function getAccountDashboard(db: SupabaseClient, account: Account) 
   // Bookings (by phone)
   const { data: bookings } = await db
     .from('bookings')
-    .select('id, ref, court, date, start_time, end_time, duration_hours, attendance, grand_total, paid_amount, credit_applied, source')
+    .select('id, ref, court, date, start_time, end_time, duration_hours, attendance, grand_total, paid_amount, credit_applied, source, cancel_token')
     .eq('phone', phone)
     .order('date', { ascending: false })
 

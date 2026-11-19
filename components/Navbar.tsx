@@ -33,6 +33,8 @@ export default function Navbar() {
 
   const accountHref = loggedIn ? "/account" : "/login";
   const accountLabel = loggedIn ? "My Account" : "Log in";
+  // Logged out → log in, then land on the bookings list.
+  const bookingsHref = loggedIn ? "/account#bookings" : "/login?next=/account";
 
   if (pathname?.startsWith("/admin")) return null;
 
@@ -69,6 +71,14 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-5">
+          {loggedIn && (
+            <Link
+              href={bookingsHref}
+              className="font-poppins text-white/75 hover:text-white text-sm font-medium transition-colors duration-200"
+            >
+              My Bookings
+            </Link>
+          )}
           <Link
             href={accountHref}
             className="font-poppins text-white/75 hover:text-white text-sm font-medium transition-colors duration-200"
@@ -112,6 +122,13 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          <Link
+            href={bookingsHref}
+            className="font-poppins text-white/80 hover:text-white text-sm font-medium transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            My Bookings
+          </Link>
           <Link
             href={accountHref}
             className="font-poppins text-white/80 hover:text-white text-sm font-medium transition-colors"

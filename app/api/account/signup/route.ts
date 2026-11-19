@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { isValidPkMobile, normalizePhone } from '@/lib/phone'
 import { createOrClaimAccount, findAccountByEmail, issueMagicToken } from '@/lib/accounts'
+import { safeNextPath } from '@/lib/next-path'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -50,7 +51,9 @@ export async function POST(request: NextRequest) {
   })
 
   const base = new URL(request.url).origin
-  const link = `${base}/api/account/verify/${token}`
+  // Optional return path (e.g. back to the booking slot they picked).
+  const next = safeNextPath(body.next)
+  const link = `${base}/api/account/verify/${token}${next ? `?next=${encodeURIComponent(next)}` : ''}`
   const { sendMagicLink } = await import('@/lib/email')
   await sendMagicLink({ to: deliverTo, name: account.name, link, isSignup: true })
 

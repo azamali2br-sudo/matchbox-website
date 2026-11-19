@@ -2,7 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { formatDate, formatTime, formatCurrency, WHATSAPP_NUMBER } from '@/lib/constants'
+import {
+  formatDate, formatTime, formatCurrency, formatClockPKT, WHATSAPP_NUMBER,
+  BANK_DETAILS, hasBankDetails, TIME_SLOTS, DURATION_OPTIONS, getTotalPrice,
+  doesBookingOverlapSlot, addHoursToTime, getTodayStr,
+} from '@/lib/constants'
 
 type ManageBooking = {
   ref: string
@@ -24,6 +28,11 @@ type ManageBooking = {
   netCreditChange: number
   isPast: boolean
   alreadyCancelled: boolean
+  id: string
+  extrasTotal: number
+  amountOwed: number
+  holdExpiresAt: string | null
+  canReschedule: boolean
 }
 
 type CreditInfo = {
@@ -44,6 +53,13 @@ export default function ManageClient({ token }: { token: string }) {
   const [redeeming, setRedeeming] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [redeemAmount, setRedeemAmount] = useState('')
+  const [loggedIn, setLoggedIn] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/account/me?optional=1')
+      .then(async r => setLoggedIn(r.ok && !!(await r.json()).account))
+      .catch(() => {})
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -148,11 +164,11 @@ export default function ManageClient({ token }: { token: string }) {
 
   return (
     <div className="min-h-screen bg-navy text-white pb-16">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-12">
-        <Link href="/" className="font-poppins text-white/40 text-xs hover:text-white/70 mb-8 inline-block">← Back to site</Link>
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-32 lg:pt-40">
+        <Link href={loggedIn ? '/account#bookings' : '/'} className="font-poppins text-white/40 text-xs hover:text-white/70 mb-8 inline-block">{loggedIn ? '← My bookings' : '← Back to site'}</Link>
 
         <h1 className="font-qaranta text-4xl sm:text-5xl text-white mb-2 uppercase">Your Booking</h1>
-        <p className="font-poppins text-white/40 text-sm mb-8">Ref · <span className="font-mono text-white/70">{booking.ref}</span></p>
+        <p className="font-poppins text-white/50 text-sm mb-8">Booking ref <span className="font-mono font-semibold text-orange">{booking.ref}</span></p>
 
         {successMessage && (
           <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 mb-6">
@@ -173,9 +189,32 @@ export default function ManageClient({ token }: { token: string }) {
             <Field label="Time" value={`${formatTime(booking.startTime)} – ${formatTime(booking.endTime)}`} />
             <Field label="Duration" value={`${booking.durationHours} hr`} />
             <Field label="Total" value={formatCurrency(booking.grandTotal)} />
-            <Field label="Status" value={booking.alreadyCancelled ? 'Cancelled' : booking.isPast ? 'Past' : 'Active'} />
+            <Field label="Status" value={booking.alreadyCancelled ? 'Cancelled' : booking.isPast ? 'Past' : booking.amountOwed > 0 ? 'Pending payment' : 'Confirmed'} />
           </div>
         </div>
+
+        {/* Payment — always reachable again, not just on the success screen / email */}
+        {!booking.alreadyCancelled && !booking.isPast && booking.amountOwed > 0 && (
+          <PaymentPanel booking={booking} />
+        )}
+
+        {/* Change time */}
+        {!booking.alreadyCancelled && !booking.isPast && (
+          booking.canReschedule ? (
+            <ReschedulePanel
+              token={token}
+              booking={booking}
+              onDone={async (msg) => { setSuccessMessage(msg); setError(null); await load(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            />
+          ) : (
+            <div className="bg-navy-card border border-white/8 rounded-2xl p-6 mb-6">
+              <h2 className="font-qaranta text-2xl text-white mb-2 uppercase">Change Time</h2>
+              <p className="font-poppins text-white/50 text-sm">
+                Paid bookings can be changed online up to 24 hours before the slot. To change this one, <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-orange hover:underline">WhatsApp us</a>.
+              </p>
+            </div>
+          )
+        )}
 
         {/* Credit panel */}
         {credit && !booking.alreadyCancelled && (
@@ -363,6 +402,235 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
     <div className="bg-navy border border-white/8 rounded-xl px-3 py-3">
       <p className="font-poppins text-white/35 text-[10px] uppercase tracking-wider mb-1">{label}</p>
       <p className={`font-qaranta text-lg ${accent ? 'text-orange' : 'text-white'}`}>{value}</p>
+    </div>
+  )
+}
+
+function CopyValue({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-white/5 last:border-0">
+      <div className="min-w-0">
+        <p className="font-poppins text-white/40 text-[11px]">{label}</p>
+        <p className="font-poppins text-white text-sm font-medium [overflow-wrap:anywhere]">{value}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => { navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }).catch(() => {}) }}
+        className="shrink-0 font-poppins text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white/5 border border-white/12 hover:bg-white/10 text-white/70"
+      >
+        {copied ? 'Copied ✓' : 'Copy'}
+      </button>
+    </div>
+  )
+}
+
+function PaymentPanel({ booking }: { booking: ManageBooking }) {
+  const waText = `Hi! ${hasBankDetails() ? 'Payment screenshot for' : 'Please send payment details for'} booking ${booking.ref} (Box ${booking.court}, ${formatDate(booking.date)}, ${formatTime(booking.startTime)}–${formatTime(booking.endTime)})`
+  const waHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waText)}`
+  const deadline = booking.holdExpiresAt ? formatClockPKT(booking.holdExpiresAt) : null
+  return (
+    <div className="bg-orange/8 border border-orange/25 rounded-2xl p-6 mb-6">
+      <h2 className="font-qaranta text-2xl text-orange mb-2 uppercase">Complete Payment</h2>
+      <p className="font-poppins text-white/70 text-sm mb-4">
+        {hasBankDetails()
+          ? <>Transfer <span className="text-white font-semibold">{formatCurrency(booking.amountOwed)}</span>, then send the screenshot on WhatsApp with your ref <span className="text-white font-semibold">{booking.ref}</span>.</>
+          : <>To pay <span className="text-white font-semibold">{formatCurrency(booking.amountOwed)}</span>, WhatsApp us with your ref <span className="text-white font-semibold">{booking.ref}</span> and we&apos;ll send payment details.</>}
+      </p>
+      {hasBankDetails() && (
+        <div className="bg-navy border border-white/8 rounded-xl px-4 py-1 mb-4">
+          <CopyValue label="Bank" value={BANK_DETAILS.bankName} />
+          <CopyValue label="Account title" value={BANK_DETAILS.accountTitle} />
+          <CopyValue label="Account no" value={BANK_DETAILS.accountNumber} />
+          <CopyValue label="IBAN" value={BANK_DETAILS.iban} />
+          <CopyValue label="Amount" value={String(booking.amountOwed)} />
+        </div>
+      )}
+      {deadline && (
+        <p className="font-poppins text-amber-400/90 text-xs leading-relaxed mb-4">
+          ⏱ Slot held until <span className="font-semibold text-amber-400">{deadline}</span>. It&apos;s released automatically if payment isn&apos;t received by then.
+        </p>
+      )}
+      <a
+        href={waHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-colors"
+      >
+        {hasBankDetails() ? 'Send payment screenshot' : 'WhatsApp us to pay'}
+      </a>
+    </div>
+  )
+}
+
+type PublicBooking = { id: string; startTime: string; endTime: string }
+
+function isClosedStart(time: string, hours: number): boolean {
+  const [h, m] = time.split(':').map(Number)
+  const start = h * 60 + m
+  const end = start + Math.round(hours * 60)
+  return start < 15 * 60 && end > 9 * 60
+}
+
+function ReschedulePanel({ token, booking, onDone }: { token: string; booking: ManageBooking; onDone: (msg: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [date, setDate] = useState(booking.date)
+  const [court, setCourt] = useState<'A' | 'B'>(booking.court)
+  const [duration, setDuration] = useState(booking.durationHours)
+  const [taken, setTaken] = useState<PublicBooking[] | null>(null)
+  const [start, setStart] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [now, setNow] = useState(0)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    fetch(`/api/bookings?date=${date}&court=${court}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setTaken(((d.bookings ?? []) as PublicBooking[]).filter(b => b.id !== booking.id)) })
+      .catch(() => { if (!cancelled) setTaken([]) })
+    return () => { cancelled = true }
+  }, [open, date, court, booking.id])
+
+  const startOk = (t: string) => {
+    if (new Date(`${date}T${t}:00+05:00`).getTime() <= now) return false
+    if (isClosedStart(t, duration)) return false
+    const idx = TIME_SLOTS.indexOf(t)
+    for (let i = 0; i < Math.round(duration * 2); i++) {
+      const slot = TIME_SLOTS[(idx + i) % TIME_SLOTS.length]
+      if ((taken ?? []).some(b => doesBookingOverlapSlot(b.startTime, b.endTime, slot))) return false
+    }
+    return true
+  }
+  const options = taken ? TIME_SLOTS.filter(startOk) : []
+  const isCurrent = (t: string) => date === booking.date && court === booking.court && t === booking.startTime && duration === booking.durationHours
+  const newTotal = start ? getTotalPrice(start, duration) + booking.extrasTotal : null
+  const valueIn = booking.paidAmount + booking.creditApplied
+  const owedAfter = newTotal !== null ? Math.max(0, newTotal - valueIn) : null
+
+  async function save() {
+    if (!start) return
+    setSaving(true)
+    setErr(null)
+    try {
+      const res = await fetch(`/api/bookings/reschedule/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ court, date, startTime: start, durationHours: duration }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(data.error || `Could not change the booking (HTTP ${res.status})`); return }
+      setOpen(false)
+      onDone(
+        `Booking moved to Box ${court}, ${formatDate(date)}, ${formatTime(start)}–${formatTime(addHoursToTime(start, duration))}.` +
+        (data.creditReturned > 0 ? ` ${formatCurrency(data.creditReturned)} credit returned.` : '') +
+        ' We\'ve emailed you the updated details.',
+      )
+    } catch {
+      setErr('Network error. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="bg-navy-card border border-white/8 rounded-2xl p-6 mb-6">
+        <h2 className="font-qaranta text-2xl text-white mb-2 uppercase">Change Time</h2>
+        <p className="font-poppins text-white/50 text-sm mb-4">
+          Move to another time, day or court. Your booking ref stays the same{booking.amountOwed > 0 && booking.holdExpiresAt ? ' and the payment deadline does not change' : ''}.
+        </p>
+        <button
+          onClick={() => { setNow(Date.now()); setTaken(null); setStart(null); setOpen(true) }}
+          className="font-poppins text-xs font-semibold px-4 py-3 rounded-xl bg-orange hover:bg-orange-dark text-white"
+        >
+          Change time
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-navy-card border border-orange/30 rounded-2xl p-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-qaranta text-2xl text-white uppercase">Change Time</h2>
+        <button onClick={() => setOpen(false)} className="font-poppins text-white/40 hover:text-white text-xs">Close</button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+        <label className="block">
+          <span className="font-poppins text-white/40 text-[11px] uppercase tracking-wider">Date</span>
+          <input
+            type="date"
+            value={date}
+            min={getTodayStr()}
+            onChange={e => { if (e.target.value) { setDate(e.target.value); setTaken(null); setStart(null) } }}
+            className="mt-1 w-full bg-navy border border-white/10 rounded-xl px-3 py-2.5 font-poppins text-sm text-white outline-none focus:border-orange/50 [color-scheme:dark]"
+          />
+        </label>
+        <div>
+          <span className="font-poppins text-white/40 text-[11px] uppercase tracking-wider">Court</span>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            {(['A', 'B'] as const).map(c => (
+              <button key={c} type="button" onClick={() => { if (c !== court) { setCourt(c); setTaken(null); setStart(null) } }}
+                className={`font-poppins text-sm font-semibold py-2.5 rounded-xl border transition-colors ${court === c ? 'bg-orange border-orange text-white' : 'bg-navy border-white/10 text-white/70 hover:border-orange/40'}`}>
+                Box {c}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="block">
+          <span className="font-poppins text-white/40 text-[11px] uppercase tracking-wider">Duration</span>
+          <select
+            value={duration}
+            onChange={e => { setDuration(Number(e.target.value)); setStart(null) }}
+            className="mt-1 w-full bg-navy border border-white/10 rounded-xl px-3 py-2.5 font-poppins text-sm text-white outline-none focus:border-orange/50"
+          >
+            {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d} hour{d !== 1 ? 's' : ''}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <p className="font-poppins text-white/40 text-[11px] uppercase tracking-wider mb-2">Available start times</p>
+      {taken === null ? (
+        <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-orange/40 border-t-orange rounded-full animate-spin" /></div>
+      ) : options.length === 0 ? (
+        <p className="font-poppins text-white/40 text-sm py-3">No free {duration}-hour slots on Box {court} that day. Try another day, court or duration.</p>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-5">
+          {options.map(t => (
+            <button key={t} type="button" disabled={isCurrent(t)} onClick={() => setStart(t)}
+              className={`font-poppins text-xs font-semibold py-2.5 rounded-lg border transition-colors disabled:opacity-40 ${start === t ? 'bg-orange border-orange text-white' : 'bg-navy border-white/10 text-white/80 hover:border-orange/40'}`}>
+              {formatTime(t)}{isCurrent(t) ? ' · now' : ''}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {start && newTotal !== null && owedAfter !== null && (
+        <div className="bg-navy border border-white/8 rounded-xl p-4 mb-4">
+          <p className="font-poppins text-white text-sm font-medium mb-1">
+            Box {court} · {formatDate(date)} · {formatTime(start)} – {formatTime(addHoursToTime(start, duration))}
+          </p>
+          <p className="font-poppins text-white/50 text-xs">
+            New total {formatCurrency(newTotal)}
+            {newTotal !== booking.grandTotal && <> (was {formatCurrency(booking.grandTotal)})</>}
+            {valueIn > 0 && <> · {formatCurrency(valueIn)} already paid/credited</>}
+            {' · '}<span className="text-white/80">{owedAfter > 0 ? `${formatCurrency(owedAfter)} to pay` : 'nothing to pay'}</span>
+          </p>
+        </div>
+      )}
+
+      {err && <p className="font-poppins text-red-400 text-xs mb-3">{err}</p>}
+
+      <button
+        onClick={save}
+        disabled={!start || saving}
+        className="w-full font-poppins text-sm font-semibold py-3.5 rounded-xl bg-orange hover:bg-orange-dark text-white disabled:opacity-40"
+      >
+        {saving ? 'Saving…' : 'Confirm new time'}
+      </button>
     </div>
   )
 }

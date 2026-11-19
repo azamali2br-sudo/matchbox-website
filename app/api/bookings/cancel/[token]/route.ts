@@ -63,6 +63,14 @@ function projectForCustomer(b: Record<string, unknown>, priorReward: number) {
     netCreditChange: refundCredit - priorReward,
     isPast: hours <= 0,
     alreadyCancelled: b.attendance === 'cancelled',
+    // For the manage page: payment panel + "Change time".
+    id: b.id,
+    extrasTotal: (b.extras_total as number) ?? 0,
+    amountOwed: Math.max(0, ((b.grand_total as number) ?? 0) - valueIn),
+    holdExpiresAt: (b.hold_expires_at as string | null) ?? null,
+    // Same rule as POST /api/bookings/reschedule/[token]: unpaid → any time
+    // before the slot; paid (cash or credit) → 24h+ before.
+    canReschedule: b.attendance === 'booked' && hours > 0 && (valueIn === 0 || hours >= 24),
   }
 }
 

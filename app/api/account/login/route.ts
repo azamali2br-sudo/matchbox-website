@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { findAccountByEmail, issueMagicToken } from '@/lib/accounts'
+import { safeNextPath } from '@/lib/next-path'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -18,9 +19,7 @@ export async function POST(request: NextRequest) {
 
   // Optional post-login destination (e.g. back to the match-submit form).
   // Relative paths only — never an absolute URL someone else controls.
-  const next = typeof body?.next === 'string' && /^\/(?!\/)[\w\-/?=&%.]*$/.test(body.next) && body.next.length <= 200
-    ? body.next
-    : null
+  const next = safeNextPath(body?.next)
 
   const { supabaseAdmin } = await import('@/lib/supabase')
   const account = await findAccountByEmail(supabaseAdmin, email)

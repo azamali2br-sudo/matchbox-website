@@ -8,6 +8,8 @@ export const BOOKING_INCREMENT = 0.5
 
 export const WHATSAPP_NUMBER = '923222172629'
 export const WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}`
+// The Matchbox WhatsApp community group ("Join Our Community" buttons).
+export const WHATSAPP_COMMUNITY_LINK = 'https://chat.whatsapp.com/GH4enmtNmQbCN6p9Ike07L'
 
 // Bank transfer details shown on the booking screen and in the payment email.
 // Real account supplied by Azam 2026-11-19 (replaced a placeholder IBAN,

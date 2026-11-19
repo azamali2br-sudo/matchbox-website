@@ -16,7 +16,7 @@ type Dashboard = {
     totalOut: number
     ledger: { amount: number; source: string; note: string | null; created_at: string; expires_at: string | null; balanceAfter: number }[]
   }
-  bookings: { id: string; ref: string; court: 'A' | 'B'; date: string; start_time: string; end_time: string; duration_hours: number; attendance: string; grand_total: number; paid_amount: number; credit_applied: number; source: string }[]
+  bookings: { id: string; ref: string; court: 'A' | 'B'; date: string; start_time: string; end_time: string; duration_hours: number; attendance: string; grand_total: number; paid_amount: number; credit_applied: number; source: string; cancel_token: string | null }[]
 }
 
 function txnLabel(source: string, amount: number): string {
@@ -48,7 +48,7 @@ export default function AccountPage() {
   useEffect(() => {
     fetch('/api/account/me')
       .then(async res => {
-        if (res.status === 401) { router.replace('/login'); return null }
+        if (res.status === 401) { router.replace('/login?next=/account'); return null }
         return res.json()
       })
       .then(d => { if (d) setData(d) })
@@ -64,6 +64,13 @@ export default function AccountPage() {
       .then(d => setBadges([...new Set((d.trophyCase ?? []).flatMap((t: { badges: BadgeKey[] }) => t.badges))] as BadgeKey[]))
       .catch(() => {})
   }, [data?.matchIq?.playerId])
+
+  // /account#bookings (from the menu): jump to the bookings card once it renders.
+  useEffect(() => {
+    if (data && window.location.hash === '#bookings') {
+      document.getElementById('bookings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [data])
 
   async function logout() {
     await fetch('/api/account/logout', { method: 'POST' })
@@ -181,7 +188,7 @@ export default function AccountPage() {
         )}
 
         {/* Bookings */}
-        <div className="bg-navy-card border border-white/8 rounded-2xl p-6">
+        <div id="bookings" className="bg-navy-card border border-white/8 rounded-2xl p-6 scroll-mt-28">
           <div className="flex items-center justify-between mb-4">
             <div className="font-poppins text-white/55 text-xs uppercase tracking-wide">Your bookings</div>
             <Link href="/booking" className="font-poppins text-orange hover:text-orange-dark text-xs font-semibold">Book a court →</Link>
@@ -214,18 +221,33 @@ export default function AccountPage() {
 
 function BookingRow({ b }: { b: Dashboard['bookings'][number] }) {
   const st = bookingState(b)
-  return (
-    <div className="flex items-center justify-between gap-3 bg-navy border border-white/6 rounded-xl px-4 py-3">
-      <div className="min-w-0">
+  const pill = <span className={`font-poppins text-[11px] font-medium border rounded-full px-2.5 py-0.5 whitespace-nowrap ${st.cls}`}>{st.label}</span>
+  const inner = (
+    <>
+      <div className="min-w-0 flex-1">
         <div className="font-poppins text-white text-sm font-medium">
           Box {b.court} · {formatDate(b.date)}
         </div>
-        <div className="font-poppins text-white/40 text-xs">
+        <div className="font-poppins text-white/45 text-xs mt-0.5">
           {formatTime(b.start_time)} – {formatTime(b.end_time)} · {formatCurrency(b.grand_total)}
           {b.source !== 'online' ? ' · WhatsApp' : ''}
         </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+          <span className="font-poppins text-white/30 text-[11px] font-mono">{b.ref}</span>
+          <span className="sm:hidden">{pill}</span>
+        </div>
       </div>
-      <span className={`shrink-0 font-poppins text-xs font-medium border rounded-full px-2.5 py-1 ${st.cls}`}>{st.label}</span>
-    </div>
+      <div className="shrink-0 flex items-center gap-2">
+        <span className="hidden sm:inline">{pill}</span>
+        {b.cancel_token && (
+          <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+        )}
+      </div>
+    </>
   )
+  const cls = 'flex items-center justify-between gap-3 bg-navy border border-white/6 rounded-xl px-4 py-3'
+  // Opens the booking page: payment details, change time, cancel, apply credit.
+  return b.cancel_token
+    ? <Link href={`/booking/manage/${b.cancel_token}`} className={`${cls} hover:border-orange/40 transition-colors`}>{inner}</Link>
+    : <div className={cls}>{inner}</div>
 }

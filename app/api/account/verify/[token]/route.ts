@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { consumeMagicToken } from '@/lib/accounts'
+import { safeNextPath } from '@/lib/next-path'
 import { createAccountSession, accountCookieOptions, ACCOUNT_COOKIE } from '@/lib/account-auth'
 
 const TOKEN_RE = /^[a-f0-9]{64}$/
@@ -31,7 +32,7 @@ export async function GET(
   // Land wherever the login started (e.g. the match-submit form) — relative
   // paths only, so the link can never redirect off-site.
   const nextParam = new URL(request.url).searchParams.get('next')
-  const next = nextParam && /^\/(?!\/)[\w\-/?=&%.]*$/.test(nextParam) ? nextParam : '/account'
+  const next = safeNextPath(nextParam) ?? '/account'
 
   const res = NextResponse.redirect(`${base}${next}`)
   res.cookies.set(ACCOUNT_COOKIE, createAccountSession(account.id), accountCookieOptions())

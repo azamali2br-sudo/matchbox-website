@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   TIME_SLOTS,
@@ -70,6 +70,28 @@ export default function BookingClient() {
   const [creditBalance, setCreditBalance] = useState(0)
   const [authLoaded, setAuthLoaded] = useState(false)
   const [applyCredit, setApplyCredit] = useState(false)
+  // Slot picked before logging in. The login/signup links carry it through the
+  // magic link as /booking?date=…&court=…&t=1900&dur=1.5, and it's re-selected
+  // here once that day's slots load — so the player lands right back where they were.
+  const [urlReady, setUrlReady] = useState(false)
+  const pendingPick = useRef<{ time: string; hours: number } | null>(null)
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time read of the URL on mount (keeps the page statically rendered) */
+    const q = new URLSearchParams(window.location.search)
+    const d = q.get('date')
+    const c = q.get('court')
+    const t = q.get('t')
+    const dur = Number(q.get('dur'))
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= getTodayStr()) setDate(d)
+    if (c === 'A' || c === 'B') setCourt(c)
+    if (t && /^\d{4}$/.test(t)) {
+      const time = `${t.slice(0, 2)}:${t.slice(2)}`
+      if (TIME_SLOTS.includes(time)) pendingPick.current = { time, hours: DURATION_OPTIONS.includes(dur) ? dur : 1 }
+    }
+    setUrlReady(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [])
 
   // Who's booking? Online booking requires a logged-in account; identity is
   // taken from the session server-side, so we just prefill the display here.
@@ -121,6 +143,25 @@ export default function BookingClient() {
         }
       })
       setSlots(computed)
+
+      // Re-select the slot carried through login, if it's still free.
+      const pick = pendingPick.current
+      if (pick) {
+        pendingPick.current = null
+        const free = (t: string) => computed.find(x => x.time === t)?.status === 'available'
+        const rangeFree = (hours: number) => {
+          const idx = TIME_SLOTS.indexOf(pick.time)
+          for (let i = 0; i < Math.round(hours * 2); i++) if (!free(TIME_SLOTS[(idx + i) % TIME_SLOTS.length])) return false
+          return true
+        }
+        if (free(pick.time)) {
+          setSelectedSlot(pick.time)
+          setDuration(rangeFree(pick.hours) ? pick.hours : 1)
+          if (window.innerWidth < 1024) {
+            setTimeout(() => document.getElementById('booking-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+          }
+        }
+      }
     } catch {
       setSlots(TIME_SLOTS.map(time => ({ time, status: 'available' })))
     } finally {
@@ -129,8 +170,19 @@ export default function BookingClient() {
   }, [date, court])
 
   useEffect(() => {
-    fetchSlots()
-  }, [fetchSlots])
+    if (urlReady) fetchSlots()
+  }, [fetchSlots, urlReady])
+
+  // Booking done: the success screen replaces the page, but the browser keeps
+  // the old scroll position (on phones that's far down) — jump to the top.
+  useEffect(() => {
+    if (step === 'success') window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+  }, [step])
+
+  // Where to come back to after logging in / signing up.
+  const resumePath = `/booking?date=${date}&court=${court}${selectedSlot ? `&t=${selectedSlot.replace(':', '')}&dur=${duration}` : ''}`
+  const loginHref = `/login?next=${encodeURIComponent(resumePath)}`
+  const signupHref = `/signup?next=${encodeURIComponent(resumePath)}`
 
   function isSlotRangeAvailable(startTime: string, hours: number): boolean {
     const steps = Math.round(hours * 2) // TIME_SLOTS are 30-min, so check every half-hour the booking covers
@@ -173,7 +225,7 @@ export default function BookingClient() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!account) { window.location.href = '/login'; return }
+    if (!account) { window.location.href = loginHref; return }
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
     if (!selectedSlot) return
@@ -195,7 +247,7 @@ export default function BookingClient() {
           applyCredit: creditToApply,
         }),
       })
-      if (res.status === 401) { window.location.href = '/login'; return }
+      if (res.status === 401) { window.location.href = loginHref; return }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || `Server error (HTTP ${res.status})`)
 
@@ -525,9 +577,9 @@ export default function BookingClient() {
                       <p className="font-poppins text-white/45 text-xs leading-relaxed mb-5">
                         One quick sign-up and you&apos;re set for good — your bookings, credit, and Match IQ rating all live in one place.
                       </p>
-                      <Link href="/login" className="block w-full bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-all mb-2">Log in</Link>
-                      <Link href="/signup" className="block w-full border border-white/12 hover:border-orange/40 text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-colors">Create an account</Link>
-                      <p className="font-poppins text-white/25 text-[11px] mt-4">Your slot selection is saved — just come right back.</p>
+                      <Link href={loginHref} className="block w-full bg-orange hover:bg-orange-dark text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-all mb-2">Log in</Link>
+                      <Link href={signupHref} className="block w-full border border-white/12 hover:border-orange/40 text-white font-poppins font-semibold text-sm py-3.5 rounded-xl transition-colors">Create an account</Link>
+                      <p className="font-poppins text-white/25 text-[11px] mt-4">Your slot is saved — the email link brings you right back here.</p>
                     </div>
                   ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
@@ -742,7 +794,7 @@ function SuccessScreen({ data, onBookAnother }: { data: SuccessData; onBookAnoth
             <Link href={`/booking/manage/${data.cancelToken}`} className="font-poppins text-orange font-semibold text-sm hover:underline">
               Open booking page →
             </Link>
-            <p className="font-poppins text-white/40 text-xs mt-1">Cancel, apply credit, or change details anytime.</p>
+            <p className="font-poppins text-white/40 text-xs mt-1">Payment details, change time, or cancel — anytime. Also under My Bookings.</p>
           </div>
         )}
 

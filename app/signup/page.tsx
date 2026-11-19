@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 export default function SignupPage() {
@@ -10,6 +10,11 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  // Where to land after the verify link (e.g. back to the booking slot picked).
+  const [nextPath, setNextPath] = useState<string | null>(null)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time URL read on mount
+  useEffect(() => { setNextPath(new URLSearchParams(window.location.search).get('next')) }, [])
+  const loginHref = nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : '/login'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -19,7 +24,7 @@ export default function SignupPage() {
       const res = await fetch('/api/account/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, email }),
+        body: JSON.stringify({ name, phone, email, next: nextPath || undefined }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Could not create your account'); return }
@@ -47,7 +52,7 @@ export default function SignupPage() {
             Already played with us and gave an email before? Then the link went to that email instead.
           </p>
           <p className="font-poppins text-white/40 text-xs mt-6">
-            Link expires in 30 minutes. Already verified? <Link href="/login" className="text-orange hover:text-orange-dark">Log in</Link>
+            Link expires in 30 minutes. Already verified? <Link href={loginHref} className="text-orange hover:text-orange-dark">Log in</Link>
           </p>
         </div>
       </div>
@@ -115,7 +120,7 @@ export default function SignupPage() {
         </form>
 
         <p className="font-poppins text-white/40 text-xs text-center mt-6">
-          Already have an account? <Link href="/login" className="text-orange hover:text-orange-dark">Log in</Link>
+          Already have an account? <Link href={loginHref} className="text-orange hover:text-orange-dark">Log in</Link>
         </p>
       </div>
     </div>

@@ -18,6 +18,7 @@ function LoginInner() {
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const signupHref = nextPath ? `/signup?next=${encodeURIComponent(nextPath)}` : '/signup'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -51,7 +52,7 @@ function LoginInner() {
           It works once and expires in 30 minutes.
         </p>
         <p className="font-poppins text-white/40 text-xs mt-6">
-          Don&apos;t have an account yet? <Link href="/signup" className="text-orange hover:text-orange-dark">Sign up</Link>
+          Don&apos;t have an account yet? <Link href={signupHref} className="text-orange hover:text-orange-dark">Sign up</Link>
         </p>
       </div>
     )
@@ -99,7 +100,7 @@ function LoginInner() {
       </form>
 
       <p className="font-poppins text-white/40 text-xs text-center mt-6">
-        New here? <Link href="/signup" className="text-orange hover:text-orange-dark">Create an account</Link>
+        New here? <Link href={signupHref} className="text-orange hover:text-orange-dark">Create an account</Link>
       </p>
     </div>
   )

@@ -8,6 +8,7 @@ import { getAccountById } from '@/lib/accounts'
 import { getCreditBalance, redeemCredit } from '@/lib/credits'
 import { releaseLapsedHolds, clearHoldIfSettled } from '@/lib/holds'
 import { normalizePhone } from '@/lib/phone'
+import { slotHasClash } from '@/lib/booking-slot'
 import { cookies } from 'next/headers'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -242,30 +243,13 @@ export async function POST(request: NextRequest) {
     const { supabaseAdmin } = await import('@/lib/supabase')
     await releaseLapsedHolds(supabaseAdmin)
 
-    const shiftDate = (days: number) => { const d = new Date(`${date}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10) }
-    const prevDateStr = shiftDate(-1)
-    const nextDateStr = shiftDate(1)
-
-    const { data: existing, error: existingErr } = await supabaseAdmin
-      .from('bookings')
-      .select('date, start_time, duration_hours')
-      .eq('court', court)
-      .in('date', [prevDateStr, date, nextDateStr])
-      .neq('attendance', 'cancelled')
-    if (existingErr) {
+    let clash: boolean
+    try {
+      clash = await slotHasClash(supabaseAdmin, { court, date, startTime, durationHours: Number(durationHours) })
+    } catch (existingErr) {
       console.error('[booking] overlap lookup failed:', existingErr)
       return NextResponse.json({ error: 'Could not check availability. Please try again.' }, { status: 500 })
     }
-
-    const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-    const newStart = toMin(startTime)
-    const newEnd = newStart + Math.round(Number(durationHours) * 60)
-    const clash = (existing ?? []).some(b => {
-      const dayOffset = b.date === date ? 0 : b.date === prevDateStr ? -24 * 60 : 24 * 60
-      const s = dayOffset + toMin(b.start_time as string)
-      const e = s + Math.round(Number(b.duration_hours) * 60)
-      return s < newEnd && e > newStart
-    })
     if (clash) {
       return NextResponse.json({ error: 'That slot has just been taken. Please pick another time.' }, { status: 409 })
     }

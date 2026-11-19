@@ -36,3 +36,11 @@ This is enforced for `app/api/**/*.ts` by `@typescript-eslint/no-floating-promis
 - **Signup never reveals or attaches.** The response is always `{ ok: true }`; an existing account's link only goes to its email on file; a typed email is attached only when its magic link is clicked.
 - **Times shown to people use `formatClockPKT()`** (lib/constants.ts). The server runs in UTC.
 - **Bank details:** `BANK_DETAILS` is intentionally blank until the real account is supplied; `hasBankDetails()` switches the booking screen + pending email to "WhatsApp us for payment details".
+
+# Customer self-service (added 2026-11-20)
+
+- **Rescheduling** is `POST /api/bookings/reschedule/[token]` (auth = the booking's `cancel_token`, same as the manage page). Ref + token never change, so old email links keep working. Rules: unpaid bookings can move any time before the slot starts and the payment deadline (`hold_expires_at`) never moves later; bookings with any cash or credit in can move only 24h+ before the current slot (the 100% cancel tier, so moving can't dodge late-cancel tiers). A cheaper new slot returns the difference as credit only out of `credit_applied`; if the excess would come out of cash, it's refused ("WhatsApp us"). Every move appends a line to `admin_note` and emails the customer (`sendBookingRescheduled`). Slot rules are shared with new bookings via `lib/booking-slot.ts` — change them there, not inline.
+- **Manage page** (`/booking/manage/[token]`) shows the payment panel (bank details with copy buttons, amount, hold deadline, WhatsApp) whenever money is owed, plus Change time / Cancel / Apply credit. The account page's booking rows link to it (dashboard returns `cancel_token` for the owner's own bookings). Navbar has "My Bookings" → `/account#bookings`.
+- **Login keeps the picked slot.** Booking page login/signup links carry `next=/booking?date=…&court=…&t=HHMM&dur=…` through the magic link (`lib/next-path.ts` validates it; times are `HHMM` because `:` isn't allowed in `next`), and the booking page re-selects that slot once slots load.
+- **WhatsApp community** link is `WHATSAPP_COMMUNITY_LINK` in lib/constants.ts (hero "Join Our Community"). `WHATSAPP_LINK` stays the official number for payments/support.
+

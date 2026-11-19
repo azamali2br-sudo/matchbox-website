@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { WHATSAPP_COMMUNITY_LINK } from "@/lib/constants";
 
 export default function Hero() {
   return (
@@ -57,7 +58,7 @@ export default function Hero() {
               </svg>
             </Link>
             <a
-              href="https://wa.me/923222172629"
+              href={WHATSAPP_COMMUNITY_LINK}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center border border-white/25 hover:border-orange/60 hover:bg-orange/5 text-white font-poppins font-semibold text-sm px-8 py-4 rounded-full transition-all duration-200"

@@ -72,16 +72,12 @@ function manageBlock(b: BookingForEmail): string {
   return `<div style="margin:20px 0 0;padding:14px 16px;background:#f9fafb;border-radius:8px">
     <div style="font-size:12px;color:#6b7280;margin-bottom:4px">Manage your booking</div>
     <a href="${link}" style="color:${ORANGE};font-size:14px;text-decoration:none;font-weight:600">Open booking page →</a>
-    <div style="font-size:12px;color:#9ca3af;margin-top:4px">Cancel, apply credit, or change details</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px">Change the time, cancel, apply credit, or see payment details</div>
   </div>`
 }
 
-function renderPendingHtml(b: BookingForEmail): string {
-  const expiryLine = b.holdExpiresAt ? formatClockPKT(b.holdExpiresAt) : '30 minutes from now'
-  const creditLine = b.creditUsed && b.creditUsed > 0
-    ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#374151">${formatCurrency(b.creditUsed)} of credit has been applied. The amount below is what's left to pay.</p>`
-    : ''
-  const paymentBlock = hasBankDetails()
+function paymentDetailsBlock(): string {
+  return hasBankDetails()
     ? `<div style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px">Bank transfer</div>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:8px;margin:0 0 20px">
       <tr><td style="padding:14px 16px">
@@ -96,6 +92,14 @@ function renderPendingHtml(b: BookingForEmail): string {
     : `<div style="margin:0 0 20px;padding:14px 16px;background:#f9fafb;border-radius:8px;font-size:14px;line-height:1.6">
         <strong>How to pay:</strong> message us on WhatsApp with your booking ref and we'll send payment details right away.
       </div>`
+}
+
+function renderPendingHtml(b: BookingForEmail): string {
+  const expiryLine = b.holdExpiresAt ? formatClockPKT(b.holdExpiresAt) : '30 minutes from now'
+  const creditLine = b.creditUsed && b.creditUsed > 0
+    ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#374151">${formatCurrency(b.creditUsed)} of credit has been applied. The amount below is what's left to pay.</p>`
+    : ''
+  const paymentBlock = paymentDetailsBlock()
   const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
     `Hi! ${hasBankDetails() ? 'Payment screenshot for' : 'Please send payment details for'} booking ${b.ref} (${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)}–${formatTime(b.endTime)})`,
   )}`
@@ -233,4 +237,37 @@ export async function sendBookingExpired(b: BookingForEmail): Promise<void> {
 
 export async function sendBookingCancelled(b: BookingForEmail): Promise<void> {
   return send(b.email, `Booking cancelled — ${courtLabel(b.court)}, ${formatDate(b.date)} (${b.ref})`, renderCancelledHtml(b))
+}
+
+type RescheduledEmail = BookingForEmail & { amountOwed: number; previousLabel: string; extraCredit?: number }
+
+function renderRescheduledHtml(b: RescheduledEmail): string {
+  const owed = b.amountOwed
+  const deadline = owed > 0 && b.holdExpiresAt ? formatClockPKT(b.holdExpiresAt) : null
+  const waLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+    `Hi! ${hasBankDetails() ? 'Payment screenshot for' : 'Please send payment details for'} booking ${b.ref} (${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)}–${formatTime(b.endTime)})`,
+  )}`
+  const payBlock = owed > 0
+    ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.5"><strong>${formatCurrency(owed)}</strong> is left to pay${deadline ? ` — please pay by <strong>${deadline}</strong> or the slot is released automatically` : ''}.</p>
+      ${paymentDetailsBlock()}
+      <div style="text-align:center;margin:8px 0 8px">
+        <a href="${waLink}" style="display:inline-block;background:${ORANGE};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px">${hasBankDetails() ? 'Send screenshot on WhatsApp' : 'WhatsApp us to pay'}</a>
+      </div>`
+    : `<div style="margin:0 0 20px;padding:14px 16px;background:${GREEN}1a;border-radius:8px;font-size:14px;color:#065f46"><strong>Nothing left to pay</strong> — your booking is settled.</div>`
+  const creditBlock = b.extraCredit && b.extraCredit > 0
+    ? `<div style="margin:0 0 20px;padding:14px 16px;background:${ORANGE}1a;border-radius:8px;font-size:14px;color:#7a3e0e"><strong style="color:${ORANGE}">${formatCurrency(b.extraCredit)} credit returned</strong> — the new slot costs less. Valid for 90 days.</div>`
+    : ''
+  const body = `<p style="margin:0 0 16px;font-size:15px;line-height:1.5">Hey ${b.name},</p>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.5">Your booking has been moved. Your booking ref stays the same.</p>
+    <p style="margin:0 0 12px;font-size:13px;color:#6b7280">Was: ${b.previousLabel}</p>
+    ${bookingDetailsTable(b)}
+    ${creditBlock}
+    ${payBlock}
+    ${manageBlock(b)}
+    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;line-height:1.5">Questions? WhatsApp us at +${WHATSAPP_NUMBER}.</p>`
+  return shell(ORANGE, 'Booking updated', body)
+}
+
+export async function sendBookingRescheduled(b: RescheduledEmail): Promise<void> {
+  return send(b.email, `Booking updated — ${courtLabel(b.court)}, ${formatDate(b.date)}, ${formatTime(b.startTime)} (${b.ref})`, renderRescheduledHtml(b))
 }
