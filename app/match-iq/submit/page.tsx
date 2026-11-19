@@ -320,7 +320,6 @@ export default function SubmitMatchPage() {
               <input
                 type="date"
                 value={playedOn}
-                max={getTodayStr()}
                 onChange={e => setPlayedOn(e.target.value)}
                 className="w-full bg-navy-card border border-white/10 text-white font-poppins text-sm px-4 py-3 rounded-xl outline-none focus:border-orange/50 transition-colors"
               />

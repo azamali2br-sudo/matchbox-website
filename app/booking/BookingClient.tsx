@@ -150,6 +150,12 @@ export default function BookingClient() {
     setSelectedSlot(time)
     // Reset duration if new slot can't support current duration
     if (!isSlotRangeAvailable(time, duration)) setDuration(1)
+    // On phones/tablets the booking panel sits below all 48 slots — bring it
+    // into view so the player doesn't have to hunt for it. (Desktop shows it
+    // alongside the slots, sticky, so no scroll there.)
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setTimeout(() => document.getElementById('booking-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+    }
   }
 
   function handleDateNav(delta: number) {
@@ -394,7 +400,7 @@ export default function BookingClient() {
           </div>
 
           {/* Right: Form panel */}
-          <div className="lg:sticky lg:top-28">
+          <div id="booking-panel" className="lg:sticky lg:top-28 scroll-mt-24">
             {!selectedSlot ? (
               <div className="bg-navy-card rounded-3xl border border-white/8 p-8 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-orange/10 border border-orange/20 flex items-center justify-center mx-auto mb-5">

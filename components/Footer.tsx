@@ -34,12 +34,12 @@ export default function Footer() {
 
           <div>
             <h4 className="font-qaranta text-white uppercase text-lg mb-5">Navigation</h4>
-            <ul className="space-y-3">
+            <ul className="space-y-1 md:space-y-3">
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="font-poppins text-white/50 hover:text-orange text-sm transition-colors"
+                    className="font-poppins text-white/50 hover:text-orange text-sm transition-colors inline-block py-2 md:py-0"
                   >
                     {link.label}
                   </Link>
@@ -87,7 +87,7 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} Matchbox Padel Club. All rights reserved.
           </p>
           <div className="flex items-center gap-5">
-            <Link href="/terms" className="font-poppins text-white/40 hover:text-orange text-xs transition-colors">
+            <Link href="/terms" className="font-poppins text-white/40 hover:text-orange text-xs transition-colors py-2">
               Terms &amp; Privacy
             </Link>
             <p className="font-poppins text-white/30 text-xs">

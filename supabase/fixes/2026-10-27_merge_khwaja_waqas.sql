@@ -1,3 +1,10 @@
+-- ✅ DONE 2026-11-19 (by Claude via REST, Azam approved) — DO NOT RUN AGAIN.
+-- Went further than this script: also deleted the unused imported account
+-- 29a99906 (+923452083354, no email, never verified), moved the main player
+-- d6351b95 to his login number +923052614891 (account 2e682e8e, khwaji@msn.com)
+-- so login ↔ profile line up, and removed the duplicate's row from the frozen
+-- 2026-08 qualifying snapshot. Backup: backups/pre-khwaja-merge-2026-11-19.json
+--
 -- Merge the duplicate Khwaja Waqas Match IQ profile into his main one, then
 -- delete the duplicate.
 --   KEEP   d6351b95-27b1-4c5e-816d-5f8e5a4cad59  +923452083354  (since 6 Jun, ~50 matches)

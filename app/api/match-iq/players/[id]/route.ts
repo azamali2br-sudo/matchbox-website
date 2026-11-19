@@ -79,7 +79,13 @@ export async function GET(
   // all-time leaderboard shows), not the incrementally-stored players.rating —
   // the two can drift when matches are approved out of play order. The rating
   // history graph still uses the stored pre/post values (that's its own series).
-  const player = allRow ? { ...playerRes.data, rating: allRow.rating } : playerRes.data
+  // Header numbers come from the live replay, like the leaderboard. The
+  // players.wins/losses columns are legacy, only bumped by the approve handler,
+  // so they go stale whenever a match is rejected, merged or corrected by hand
+  // (e.g. the Khwaja Waqas merge showed 48 matches on the profile vs 50 on the board).
+  const player = allRow
+    ? { ...playerRes.data, rating: allRow.rating, wins: allRow.wins, losses: allRow.losses }
+    : playerRes.data
 
   return NextResponse.json({
     player,
